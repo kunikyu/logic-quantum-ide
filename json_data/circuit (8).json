@@ -1,0 +1,270 @@
+{
+  "type": "quantum_ide_project",
+  "mode": "logic",
+  "logicData": {
+    "nodes": [
+      {
+        "id": "gate-CustomIC-1788246900145",
+        "type": "customGate",
+        "position": {
+          "x": 250,
+          "y": 223
+        },
+        "data": {
+          "gateType": "CustomIC",
+          "label": "test_0",
+          "handles": {
+            "inputs": 2,
+            "outputs": 1
+          },
+          "params": {
+            "customId": "custom-1788246896354"
+          }
+        },
+        "width": 80,
+        "height": 72,
+        "selected": false,
+        "positionAbsolute": {
+          "x": 370,
+          "y": 200
+        },
+        "dragging": false
+      },
+      {
+        "id": "gate-LED-1788246908593",
+        "type": "customGate",
+        "position": {
+          "x": 670,
+          "y": 162
+        },
+        "data": {
+          "gateType": "LED",
+          "label": "LED",
+          "handles": {
+            "inputs": 1,
+            "outputs": 0
+          },
+          "params": {}
+        },
+        "width": 80,
+        "height": 72,
+        "selected": false,
+        "positionAbsolute": {
+          "x": 700,
+          "y": 290
+        },
+        "dragging": false
+      },
+      {
+        "id": "gate-Switch-1788246910960",
+        "type": "customGate",
+        "position": {
+          "x": 40,
+          "y": 284
+        },
+        "data": {
+          "gateType": "Switch",
+          "label": "Switch",
+          "handles": {
+            "inputs": 0,
+            "outputs": 1
+          },
+          "params": {
+            "value": 1
+          }
+        },
+        "width": 80,
+        "height": 72,
+        "selected": false,
+        "dragging": false,
+        "positionAbsolute": {
+          "x": 120,
+          "y": 170
+        }
+      },
+      {
+        "id": "gate-Switch-1788246938986",
+        "type": "customGate",
+        "position": {
+          "x": 40,
+          "y": 40
+        },
+        "data": {
+          "gateType": "Switch",
+          "label": "Switch",
+          "handles": {
+            "inputs": 0,
+            "outputs": 1
+          },
+          "params": {
+            "value": 0
+          }
+        },
+        "width": 80,
+        "height": 72,
+        "selected": false,
+        "dragging": false
+      },
+      {
+        "id": "gate-Switch-1788246940613",
+        "type": "customGate",
+        "position": {
+          "x": 40,
+          "y": 162
+        },
+        "data": {
+          "gateType": "Switch",
+          "label": "Switch",
+          "handles": {
+            "inputs": 0,
+            "outputs": 1
+          },
+          "params": {
+            "value": 1
+          }
+        },
+        "width": 80,
+        "height": 72,
+        "selected": false,
+        "positionAbsolute": {
+          "x": 90,
+          "y": 90
+        },
+        "dragging": false
+      },
+      {
+        "id": "gate-XOR-1788246946867",
+        "type": "customGate",
+        "position": {
+          "x": 460,
+          "y": 162
+        },
+        "data": {
+          "gateType": "XOR",
+          "label": "XOR",
+          "handles": {
+            "inputs": 2,
+            "outputs": 1
+          },
+          "params": {}
+        },
+        "width": 80,
+        "height": 72,
+        "selected": false,
+        "dragging": false
+      },
+      {
+        "id": "gate-OR-1788246959635",
+        "type": "customGate",
+        "position": {
+          "x": 250,
+          "y": 101
+        },
+        "data": {
+          "gateType": "OR",
+          "label": "OR",
+          "handles": {
+            "inputs": 2,
+            "outputs": 1
+          },
+          "params": {}
+        },
+        "width": 80,
+        "height": 72
+      }
+    ],
+    "edges": [
+      {
+        "type": "default",
+        "style": {
+          "stroke": "#3a3f6e",
+          "strokeWidth": 2
+        },
+        "animated": false,
+        "source": "gate-Switch-1788246910960",
+        "sourceHandle": "out-0",
+        "target": "gate-CustomIC-1788246900145",
+        "targetHandle": "in-1",
+        "id": "reactflow__edge-gate-Switch-1788246910960out-0-gate-CustomIC-1788246900145in-1"
+      },
+      {
+        "type": "default",
+        "style": {
+          "stroke": "#3a3f6e",
+          "strokeWidth": 2
+        },
+        "animated": false,
+        "source": "gate-Switch-1788246940613",
+        "sourceHandle": "out-0",
+        "target": "gate-CustomIC-1788246900145",
+        "targetHandle": "in-0",
+        "id": "reactflow__edge-gate-Switch-1788246940613out-0-gate-CustomIC-1788246900145in-0"
+      },
+      {
+        "type": "default",
+        "style": {
+          "stroke": "#3a3f6e",
+          "strokeWidth": 2
+        },
+        "animated": false,
+        "source": "gate-CustomIC-1788246900145",
+        "sourceHandle": "out-0",
+        "target": "gate-XOR-1788246946867",
+        "targetHandle": "in-1",
+        "id": "reactflow__edge-gate-CustomIC-1788246900145out-0-gate-XOR-1788246946867in-1"
+      },
+      {
+        "type": "default",
+        "style": {
+          "stroke": "#3a3f6e",
+          "strokeWidth": 2
+        },
+        "animated": false,
+        "source": "gate-Switch-1788246938986",
+        "sourceHandle": "out-0",
+        "target": "gate-OR-1788246959635",
+        "targetHandle": "in-0",
+        "id": "reactflow__edge-gate-Switch-1788246938986out-0-gate-OR-1788246959635in-0"
+      },
+      {
+        "type": "default",
+        "style": {
+          "stroke": "#3a3f6e",
+          "strokeWidth": 2
+        },
+        "animated": false,
+        "source": "gate-OR-1788246959635",
+        "sourceHandle": "out-0",
+        "target": "gate-XOR-1788246946867",
+        "targetHandle": "in-0",
+        "id": "reactflow__edge-gate-OR-1788246959635out-0-gate-XOR-1788246946867in-0"
+      },
+      {
+        "type": "default",
+        "style": {
+          "stroke": "#3a3f6e",
+          "strokeWidth": 2
+        },
+        "animated": false,
+        "source": "gate-Switch-1788246940613",
+        "sourceHandle": "out-0",
+        "target": "gate-OR-1788246959635",
+        "targetHandle": "in-1",
+        "id": "reactflow__edge-gate-Switch-1788246940613out-0-gate-OR-1788246959635in-1"
+      },
+      {
+        "type": "default",
+        "style": {
+          "stroke": "#3a3f6e",
+          "strokeWidth": 2
+        },
+        "animated": false,
+        "source": "gate-XOR-1788246946867",
+        "sourceHandle": "out-0",
+        "target": "gate-LED-1788246908593",
+        "targetHandle": "in-0",
+        "id": "reactflow__edge-gate-XOR-1788246946867out-0-gate-LED-1788246908593in-0"
+      }
+    ]
+  }
+}

@@ -1,0 +1,284 @@
+{
+  "type": "quantum_ide_project",
+  "mode": "quantum",
+  "quantumData": {
+    "grid": [
+      [
+        null,
+        {
+          "type": "X",
+          "id": 1782184227585
+        },
+        {
+          "type": "CZ",
+          "id": 1782184236129,
+          "role": "target",
+          "pairId": 1782184241039
+        },
+        {
+          "type": "X",
+          "id": 1782184231212
+        },
+        null,
+        null,
+        null,
+        null,
+        {
+          "type": "CZ",
+          "id": 1782184345152,
+          "role": "target",
+          "pairId": 1782184336528
+        },
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        {
+          "type": "CX",
+          "id": 1782184224975,
+          "role": "target",
+          "pairId": 1782184224975
+        },
+        {
+          "type": "X",
+          "id": 1782184229247
+        },
+        {
+          "type": "CZ",
+          "id": 1782184238120,
+          "role": "target",
+          "pairId": 1782184241039
+        },
+        {
+          "type": "X",
+          "id": 1782184233081
+        },
+        {
+          "type": "CX",
+          "id": 1782184292308,
+          "role": "target",
+          "pairId": 1782184292308
+        },
+        null,
+        {
+          "type": "CX",
+          "id": 1782184322912.5762,
+          "role": "target",
+          "pairId": 1782184322912.8367
+        },
+        {
+          "type": "X",
+          "id": 1782184339936
+        },
+        {
+          "type": "CZ",
+          "id": 1782184343257,
+          "role": "target",
+          "pairId": 1782184336528
+        },
+        {
+          "type": "X",
+          "id": 1782184349442
+        },
+        {
+          "type": "CX",
+          "id": 1782184359138,
+          "role": "target",
+          "pairId": 1782184357055
+        },
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        {
+          "type": "CZ",
+          "id": 1782184217444,
+          "role": "target",
+          "pairId": 1782184224975
+        },
+        null,
+        null,
+        null,
+        {
+          "type": "CZ",
+          "id": 1782184294670,
+          "role": "target",
+          "pairId": 1782184292308
+        },
+        {
+          "type": "X",
+          "id": 1782184301205
+        },
+        {
+          "type": "CZ",
+          "id": 1782184322912.2458,
+          "role": "target",
+          "pairId": 1782184322912.8367
+        },
+        null,
+        null,
+        null,
+        {
+          "type": "CZ",
+          "id": 1782184355211,
+          "role": "target",
+          "pairId": 1782184357055
+        },
+        {
+          "type": "X",
+          "id": 1782184363150
+        },
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        {
+          "type": "CZ",
+          "id": 1782184221878,
+          "role": "target",
+          "pairId": 1782184224975
+        },
+        null,
+        null,
+        null,
+        {
+          "type": "CZ",
+          "id": 1782184296788,
+          "role": "target",
+          "pairId": 1782184292308
+        },
+        null,
+        {
+          "type": "CZ",
+          "id": 1782184322912.4705,
+          "role": "target",
+          "pairId": 1782184322912.8367
+        },
+        null,
+        null,
+        null,
+        {
+          "type": "CZ",
+          "id": 1782184357055,
+          "role": "target",
+          "pairId": 1782184357055
+        },
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        {
+          "type": "CX",
+          "id": 1782184241039,
+          "role": "target",
+          "pairId": 1782184241039
+        },
+        null,
+        null,
+        null,
+        null,
+        null,
+        {
+          "type": "CX",
+          "id": 1782184336528,
+          "role": "target",
+          "pairId": 1782184336528
+        },
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    ],
+    "numQubits": 5,
+    "numSlots": 30
+  }
+}

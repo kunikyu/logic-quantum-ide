@@ -1,0 +1,92 @@
+{
+  "type": "quantum_ide_project",
+  "mode": "quantum",
+  "quantumData": {
+    "grid": [
+      [
+        {
+          "type": "X",
+          "id": 1783375238660
+        },
+        {
+          "type": "Y",
+          "id": 1783375243619
+        },
+        {
+          "type": "MEASURE",
+          "id": 1783375248537
+        },
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        {
+          "type": "Z",
+          "id": 1783375245995
+        },
+        {
+          "type": "X",
+          "id": 1783375240098
+        },
+        {
+          "type": "MEASURE",
+          "id": 1783375250234
+        },
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    ],
+    "numQubits": 2,
+    "numSlots": 30
+  }
+}

@@ -1,0 +1,178 @@
+{
+  "type": "quantum_ide_project",
+  "mode": "logic",
+  "logicData": {
+    "nodes": [
+      {
+        "id": "gate-XOR-1780363646711",
+        "type": "customGate",
+        "position": {
+          "x": 250,
+          "y": 162
+        },
+        "data": {
+          "gateType": "XOR",
+          "label": "XOR",
+          "handles": {
+            "inputs": 3,
+            "outputs": 1
+          }
+        },
+        "width": 80,
+        "height": 78
+      },
+      {
+        "id": "gate-LED-1780363649159",
+        "type": "customGate",
+        "position": {
+          "x": 460,
+          "y": 162
+        },
+        "data": {
+          "gateType": "LED",
+          "label": "LED",
+          "handles": {
+            "inputs": 1,
+            "outputs": 0
+          }
+        },
+        "width": 80,
+        "height": 72
+      },
+      {
+        "id": "gate-Clock-1780363653971",
+        "type": "customGate",
+        "position": {
+          "x": 40,
+          "y": 60
+        },
+        "data": {
+          "gateType": "Clock",
+          "label": "Clock",
+          "handles": {
+            "inputs": 0,
+            "outputs": 1
+          },
+          "params": {
+            "pulseInterval": 1,
+            "label": "C_1"
+          }
+        },
+        "width": 80,
+        "height": 83,
+        "selected": false,
+        "positionAbsolute": {
+          "x": 40,
+          "y": 60
+        },
+        "dragging": false
+      },
+      {
+        "id": "gate-Clock-1780363658949",
+        "type": "customGate",
+        "position": {
+          "x": 40,
+          "y": 162
+        },
+        "data": {
+          "gateType": "Clock",
+          "label": "Clock",
+          "handles": {
+            "inputs": 0,
+            "outputs": 1
+          },
+          "params": {
+            "label": "C_2",
+            "pulseInterval": 2
+          }
+        },
+        "width": 80,
+        "height": 83,
+        "selected": false,
+        "dragging": false
+      },
+      {
+        "id": "gate-Clock-1780363662521",
+        "type": "customGate",
+        "position": {
+          "x": 40,
+          "y": 260
+        },
+        "data": {
+          "gateType": "Clock",
+          "label": "Clock",
+          "handles": {
+            "inputs": 0,
+            "outputs": 1
+          },
+          "params": {
+            "pulseInterval": 4,
+            "label": "C_4"
+          }
+        },
+        "width": 80,
+        "height": 83,
+        "selected": false,
+        "positionAbsolute": {
+          "x": 40,
+          "y": 260
+        },
+        "dragging": false
+      }
+    ],
+    "edges": [
+      {
+        "type": "default",
+        "style": {
+          "stroke": "#3a3f6e",
+          "strokeWidth": 2
+        },
+        "animated": false,
+        "source": "gate-Clock-1780363653971",
+        "sourceHandle": "out-0",
+        "target": "gate-XOR-1780363646711",
+        "targetHandle": "in-0",
+        "id": "reactflow__edge-gate-Clock-1780363653971out-0-gate-XOR-1780363646711in-0"
+      },
+      {
+        "type": "default",
+        "style": {
+          "stroke": "#3a3f6e",
+          "strokeWidth": 2
+        },
+        "animated": false,
+        "source": "gate-Clock-1780363658949",
+        "sourceHandle": "out-0",
+        "target": "gate-XOR-1780363646711",
+        "targetHandle": "in-1",
+        "id": "reactflow__edge-gate-Clock-1780363658949out-0-gate-XOR-1780363646711in-1"
+      },
+      {
+        "type": "default",
+        "style": {
+          "stroke": "#3a3f6e",
+          "strokeWidth": 2
+        },
+        "animated": false,
+        "source": "gate-Clock-1780363662521",
+        "sourceHandle": "out-0",
+        "target": "gate-XOR-1780363646711",
+        "targetHandle": "in-2",
+        "id": "reactflow__edge-gate-Clock-1780363662521out-0-gate-XOR-1780363646711in-2"
+      },
+      {
+        "type": "default",
+        "style": {
+          "stroke": "#3a3f6e",
+          "strokeWidth": 2
+        },
+        "animated": false,
+        "source": "gate-XOR-1780363646711",
+        "sourceHandle": "out-0",
+        "target": "gate-LED-1780363649159",
+        "targetHandle": "in-0",
+        "id": "reactflow__edge-gate-XOR-1780363646711out-0-gate-LED-1780363649159in-0"
+      }
+    ]
+  }
+}

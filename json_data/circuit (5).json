@@ -1,0 +1,298 @@
+{
+  "type": "quantum_ide_project",
+  "mode": "quantum",
+  "quantumData": {
+    "grid": [
+      [
+        null,
+        {
+          "type": "X",
+          "id": 1782184227585
+        },
+        {
+          "type": "CTRL",
+          "id": 1784589071543,
+          "role": "control",
+          "pairId": 1784589071543
+        },
+        {
+          "type": "X",
+          "id": 1782184231212
+        },
+        null,
+        null,
+        null,
+        null,
+        {
+          "type": "CTRL",
+          "id": 1784589211133,
+          "role": "control",
+          "pairId": 1784589211133
+        },
+        null,
+        null,
+        null,
+        {
+          "type": "MEASURE",
+          "id": 1784589244792,
+          "pairId": 1784589244792
+        },
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        {
+          "type": "X",
+          "id": 1784589034051,
+          "pairId": 1784589034051
+        },
+        {
+          "type": "X",
+          "id": 1782184229247
+        },
+        {
+          "type": "CTRL",
+          "id": 1784589069917,
+          "role": "control",
+          "pairId": 1784589071543
+        },
+        {
+          "type": "X",
+          "id": 1782184233081
+        },
+        {
+          "type": "X",
+          "id": 1784589166567,
+          "pairId": 1784589166567
+        },
+        null,
+        {
+          "type": "X",
+          "id": 1784589189511.7463,
+          "pairId": 1784589189511.0762
+        },
+        {
+          "type": "X",
+          "id": 1782184339936
+        },
+        {
+          "type": "CTRL",
+          "id": 1784589209326,
+          "role": "control",
+          "pairId": 1784589211133
+        },
+        {
+          "type": "X",
+          "id": 1782184349442
+        },
+        {
+          "type": "X",
+          "id": 1784589225211,
+          "pairId": 1784589233800
+        },
+        null,
+        {
+          "type": "MEASURE",
+          "id": 1784589247247,
+          "pairId": 1784589247247
+        },
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        {
+          "type": "CTRL",
+          "id": 1784589044511.6091,
+          "role": "control",
+          "pairId": 1784589034051
+        },
+        null,
+        null,
+        null,
+        {
+          "type": "CTRL",
+          "id": 1784589171049,
+          "role": "control",
+          "pairId": 1784589166567
+        },
+        {
+          "type": "X",
+          "id": 1782184301205
+        },
+        {
+          "type": "CTRL",
+          "id": 1784589189511.1692,
+          "role": "control",
+          "pairId": 1784589189511.0762
+        },
+        null,
+        null,
+        null,
+        {
+          "type": "CTRL",
+          "id": 1784589231524,
+          "role": "control",
+          "pairId": 1784589233800
+        },
+        {
+          "type": "X",
+          "id": 1782184363150
+        },
+        {
+          "type": "MEASURE",
+          "id": 1784589249354,
+          "pairId": 1784589249354
+        },
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        {
+          "type": "CTRL",
+          "id": 1784589041684.2715,
+          "role": "control",
+          "pairId": 1784589034051
+        },
+        null,
+        null,
+        null,
+        {
+          "type": "CTRL",
+          "id": 1784589172624,
+          "role": "control",
+          "pairId": 1784589166567
+        },
+        null,
+        {
+          "type": "CTRL",
+          "id": 1784589189511.4438,
+          "role": "control",
+          "pairId": 1784589189511.0762
+        },
+        null,
+        null,
+        null,
+        {
+          "type": "CTRL",
+          "id": 1784589233800,
+          "role": "control",
+          "pairId": 1784589233800
+        },
+        null,
+        {
+          "type": "MEASURE",
+          "id": 1784589251032,
+          "pairId": 1784589251032
+        },
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        {
+          "type": "X",
+          "id": 1784589064513.0913,
+          "pairId": 1784589071543
+        },
+        null,
+        null,
+        null,
+        null,
+        null,
+        {
+          "type": "X",
+          "id": 1784589201018,
+          "pairId": 1784589211133
+        },
+        null,
+        null,
+        null,
+        {
+          "type": "MEASURE",
+          "id": 1784589253003,
+          "pairId": 1784589253003
+        },
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    ],
+    "numQubits": 5,
+    "numSlots": 30
+  }
+}
