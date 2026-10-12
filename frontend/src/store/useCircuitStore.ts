@@ -27,7 +27,7 @@ export type AppMode = 'logic' | 'quantum';
 export type GateType =
   | 'AND' | 'OR' | 'NOT' | 'NAND' | 'NOR' | 'XOR'
   | 'Switch' | 'LED' | 'Clock' | 'SevenSeg'
-  | 'H' | 'X' | 'Y' | 'Z' | 'S' | 'T' | 'CX' | 'CZ' | 'CCX' | 'CTRL' | 'Measure'
+  | 'H' | 'X' | 'Y' | 'Z' | 'S' | 'T' | 'CX' | 'CZ' | 'CCX' | 'CCZ' | 'MCX' | 'MCZ' | 'CTRL' | 'Measure'
   | 'Junction' | 'CustomIC';
 
 export interface GateNodeData {

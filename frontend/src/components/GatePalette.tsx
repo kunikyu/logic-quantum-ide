@@ -14,6 +14,7 @@ import {
   Atom, RefreshCw, RefreshCcw, Zap, Timer, Sigma,
   Gauge,
   ChevronDown, ChevronRight, GitBranch, Circle,
+  Link, Link2,
 } from 'lucide-react';
 import useCircuitStore, { type GateType } from '../store/useCircuitStore';
 
@@ -30,6 +31,7 @@ export interface GateMeta {
   bgColor: string;
   textColor: string;
   params?: Record<string, any>;
+  composition?: ('CTRL' | 'X' | 'Z')[];
 }
 
 const ICON_SIZE = 15;
@@ -251,14 +253,198 @@ export const QUANTUM_GATES: GateMeta[] = [
     bgColor: 'rgba(219,39,119,0.12)',
     textColor: '#f472b6',
   },
+  {
+    gateType: 'CX', label: 'CX', description: '制御 X ゲート', icon: <Link size={ICON_SIZE} />,
+    handles: { inputs: 1, outputs: 1 }, borderColor: '#818cf8', bgColor: 'rgba(129,140,248,0.12)',
+    textColor: '#a5b4fc', composition: ['X', 'CTRL'],
+  },
+  {
+    gateType: 'CZ', label: 'CZ', description: '制御 Z ゲート', icon: <Link2 size={ICON_SIZE} />,
+    handles: { inputs: 1, outputs: 1 }, borderColor: '#4f78c7', bgColor: 'rgba(79,120,199,0.12)',
+    textColor: '#91afe6', composition: ['Z', 'CTRL'],
+  },
+  {
+    gateType: 'CCX', label: 'CCX', description: '2制御 X ゲート', icon: <Link2 size={ICON_SIZE} />,
+    handles: { inputs: 1, outputs: 1 }, borderColor: '#6d28d9', bgColor: 'rgba(109,40,217,0.12)',
+    textColor: '#8b5cf6', composition: ['X', 'CTRL', 'CTRL'],
+  },
+  {
+    gateType: 'CCZ', label: 'CCZ', description: '2制御 Z ゲート', icon: <Link2 size={ICON_SIZE} />,
+    handles: { inputs: 1, outputs: 1 }, borderColor: '#4f78c7', bgColor: 'rgba(79,120,199,0.12)',
+    textColor: '#91afe6', composition: ['Z', 'CTRL', 'CTRL'],
+  },
+  {
+    gateType: 'MCX', label: 'MCX', description: '多制御 X ゲート (3制御)', icon: <Link2 size={ICON_SIZE} />,
+    handles: { inputs: 1, outputs: 1 }, borderColor: '#6d28d9', bgColor: 'rgba(109,40,217,0.12)',
+    textColor: '#8b5cf6', composition: ['X', 'CTRL', 'CTRL', 'CTRL'],
+  },
+  {
+    gateType: 'MCZ', label: 'MCZ', description: '多制御 Z ゲート (3制御)', icon: <Link2 size={ICON_SIZE} />,
+    handles: { inputs: 1, outputs: 1 }, borderColor: '#4f78c7', bgColor: 'rgba(79,120,199,0.12)',
+    textColor: '#91afe6', composition: ['Z', 'CTRL', 'CTRL', 'CTRL'],
+  },
 ];
 
 // ============================================================
 // 個別ゲートアイテムコンポーネント
 // ============================================================
+const CompoundPreview: React.FC<{
+  gate: GateMeta;
+  top: number;
+  left: number;
+  compositionOverride?: ('CTRL' | 'X' | 'Z')[];
+  joinSide?: 'left' | 'right';
+}> = ({ gate, top, left, compositionOverride, joinSide }) => {
+  const composition = compositionOverride ?? gate.composition ?? [];
+  const width = 86;
+  const scale = 0.75;
+  const rowDistance = 58;
+  const previewHeight = 44 + composition.length * rowDistance - 12;
+  const visualWidth = width * scale;
+  const visualHeight = previewHeight * scale;
+  const clampedTop = Math.max(8, Math.min(top, window.innerHeight - visualHeight - 8));
+  const clampedLeft = Math.max(8, Math.min(left, window.innerWidth - visualWidth - 8));
+  const radius = (part: 'CTRL' | 'X' | 'Z') => part === 'CTRL' ? 8 : 23;
+  const wireColor = composition.includes('Z') ? '#4f78c7' : '#818cf8';
+  const hasCollapsedControls = gate.gateType === 'MCX' || gate.gateType === 'MCZ';
+  const labelAtBottom = composition[composition.length - 1] !== 'CTRL';
+  const title = (
+    <div style={{
+      color: gate.textColor, fontSize: '18px', fontWeight: 700,
+      fontFamily: 'var(--font-mono)', letterSpacing: '0.05em', lineHeight: 1,
+      margin: labelAtBottom ? '8px 0 0' : '0 0 8px',
+    }}>
+      {gate.label}
+    </div>
+  );
+  const frameStyle = joinSide === 'left'
+    ? { borderRadius: '8px 0 0 8px', borderRight: 'none' }
+    : joinSide === 'right'
+      ? { borderRadius: '0 8px 8px 0', borderLeft: 'none' }
+      : {};
+
+  return (
+    <div style={{
+      position: 'fixed', top: clampedTop, left: clampedLeft, zIndex: 200,
+      width: `${width}px`, padding: '8px 6px 10px',
+      transform: `scale(${scale})`, transformOrigin: 'top left',
+      border: `1px solid ${gate.borderColor}`, borderRadius: '8px',
+      ...frameStyle,
+      backgroundColor: 'var(--color-bg-panel)',
+      boxShadow: '0 10px 28px rgba(0,0,0,0.45)', pointerEvents: 'none',
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+    }}>
+      {!labelAtBottom && title}
+      <div style={{ position: 'relative', width: '46px', height: `${previewHeight - 44}px` }}>
+        {composition.slice(0, -1).map((part, index) => {
+          const start = index * rowDistance + 23 + radius(part);
+          const height = rowDistance - radius(part) - radius(composition[index + 1]);
+          const hasOmission = hasCollapsedControls && index === 1;
+          const omissionHalfHeight = 4;
+          const wireCenter = start + height / 2 + 1;
+          const omissionCenter = wireCenter - 3;
+          return (
+            <React.Fragment key={`wire-${index}`}>
+              {hasOmission ? (
+                <>
+                  <div style={{
+                    position: 'absolute', left: '50%', top: `${start}px`, width: '2px',
+                    height: `${Math.max(0, wireCenter - omissionHalfHeight - start)}px`,
+                    backgroundColor: wireColor, transform: 'translateX(-50%)', zIndex: 0,
+                  }} />
+                  <div style={{
+                    position: 'absolute', left: '50%', top: `${wireCenter + omissionHalfHeight - 2}px`, width: '2px',
+                    height: `${Math.max(0, start + height - (wireCenter + omissionHalfHeight - 2))}px`,
+                    backgroundColor: wireColor, transform: 'translateX(-50%)', zIndex: 0,
+                  }} />
+                </>
+              ) : (
+                <div style={{
+                  position: 'absolute', left: '50%', top: `${start}px`, width: '2px', height: `${height}px`,
+                  backgroundColor: wireColor, transform: 'translateX(-50%)', zIndex: 0,
+                }} />
+              )}
+              {hasOmission && (
+                <div style={{
+                  position: 'absolute', left: '50%', top: `${omissionCenter}px`,
+                  transform: 'translate(-50%, -50%)',
+                  color: wireColor, fontSize: '32px', fontWeight: 700,
+                  lineHeight: '24px', backgroundColor: 'transparent',
+                  padding: '4px 6px', zIndex: 2,
+                }}>
+                  ≈
+                </div>
+              )}
+            </React.Fragment>
+          );
+        })}
+        {composition.map((part, index) => (
+          <div key={`${part}-${index}`} style={{
+            width: '46px', height: '46px', position: 'absolute', top: `${index * rowDistance}px`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1,
+          }}>
+            {part === 'CTRL' ? (
+              <div style={{ width: '16px', height: '16px', borderRadius: '50%', backgroundColor: '#6d28d9' }} />
+            ) : (
+              <div style={{
+                width: '46px', height: '46px', borderRadius: '10px',
+                border: `2px solid ${part === 'Z' ? '#4f78c7' : '#818cf8'}`,
+                backgroundColor: part === 'Z' ? 'rgba(79,120,199,0.12)' : 'rgba(129,140,248,0.12)',
+                color: part === 'Z' ? '#91afe6' : '#a5b4fc',
+                fontSize: '18px', fontWeight: 700, fontFamily: 'var(--font-mono)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                {part}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      {labelAtBottom && title}
+    </div>
+  );
+};
+
 const GateItem: React.FC<{ gate: GateMeta; inputOverride?: number }> = ({ gate, inputOverride }) => {
   const [hovered, setHovered] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [previewPosition, setPreviewPosition] = useState<{ top: number; left: number } | null>(null);
+
+  const createCompoundDragImage = () => {
+    if (!gate.composition) return null;
+    const preview = document.createElement('div');
+    preview.style.cssText = [
+      'position:absolute', 'top:-1000px', 'left:-1000px', 'width:92px',
+      'padding:8px 10px', 'border:1px solid rgba(129,140,248,0.7)',
+      'border-radius:8px', 'background:#17152b', 'color:#e2e8f0',
+      'font:700 11px var(--font-mono)', 'text-align:center',
+      'box-shadow:0 8px 24px rgba(0,0,0,0.35)', 'pointer-events:none',
+    ].join(';');
+
+    const title = document.createElement('div');
+    title.textContent = gate.label;
+    title.style.marginBottom = '4px';
+    title.style.color = gate.textColor;
+    preview.appendChild(title);
+
+    const circuit = document.createElement('div');
+    circuit.style.cssText = 'display:flex;flex-direction:column;align-items:center;line-height:16px;';
+    gate.composition.forEach((part, index) => {
+      if (index > 0) {
+        const wire = document.createElement('div');
+        wire.textContent = '|';
+        wire.style.color = gate.borderColor;
+        circuit.appendChild(wire);
+      }
+      const symbol = document.createElement('div');
+      symbol.textContent = part;
+      symbol.style.color = part === 'Z' ? '#4f78c7' : gate.textColor;
+      circuit.appendChild(symbol);
+    });
+    preview.appendChild(circuit);
+    document.body.appendChild(preview);
+    return preview;
+  };
 
   const handleDragStart = (e: React.DragEvent) => {
     const data: DragTransferData = {
@@ -274,20 +460,44 @@ const GateItem: React.FC<{ gate: GateMeta; inputOverride?: number }> = ({ gate, 
     // 量子回路モード互換用のD&Dデータ
     e.dataTransfer.setData('mode', 'new');
     e.dataTransfer.setData('gateType', gate.gateType.toLowerCase());
+    if (gate.composition) {
+      e.dataTransfer.setData('mode', 'new-compound');
+      e.dataTransfer.setData('compoundComposition', JSON.stringify(gate.composition));
+    }
     
     e.dataTransfer.effectAllowed = 'copy';
+    const dragImage = createCompoundDragImage();
+    if (dragImage) {
+      e.dataTransfer.setDragImage(dragImage, 46, 30);
+      window.setTimeout(() => dragImage.remove(), 0);
+    }
     setDragging(true);
   };
 
   const handleDragEnd = () => setDragging(false);
 
   return (
+    <>
     <div
       draggable
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseEnter={(e) => {
+        setHovered(true);
+        if (gate.composition) {
+          const rect = e.currentTarget.getBoundingClientRect();
+          const previewHeight = (44 + gate.composition.length * 58 - 12) * 0.75;
+          const gap = 8;
+          const top = rect.top >= previewHeight + gap
+            ? rect.top - previewHeight - gap
+            : rect.bottom + gap;
+          setPreviewPosition({ top, left: rect.right + 10 });
+        }
+      }}
+      onMouseLeave={() => {
+        setHovered(false);
+        setPreviewPosition(null);
+      }}
       title={`${gate.label} — ${gate.description}\n入力: ${gate.handles.inputs}  出力: ${gate.handles.outputs}`}
       style={{
         display: 'flex',
@@ -351,6 +561,19 @@ const GateItem: React.FC<{ gate: GateMeta; inputOverride?: number }> = ({ gate, 
         <div>out:{gate.handles.outputs}</div>
       </div>
     </div>
+    {gate.composition && previewPosition && (
+      <>
+        <CompoundPreview gate={gate} top={previewPosition.top} left={previewPosition.left} joinSide="left" />
+        <CompoundPreview
+          gate={gate}
+          top={previewPosition.top}
+          left={previewPosition.left + 86 * 0.75 - 1}
+          compositionOverride={[...gate.composition].reverse()}
+          joinSide="right"
+        />
+      </>
+    )}
+    </>
   );
 };
 

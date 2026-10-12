@@ -197,7 +197,35 @@ const QuantumCircuitCanvas: React.FC = () => {
     setDraggingGate(null);
 
     const mode = e.dataTransfer.getData('mode');
-    if (mode === 'new') {
+    if (mode === 'new-compound') {
+      const composition = JSON.parse(e.dataTransfer.getData('compoundComposition') || '[]') as string[];
+      const requestedStartQ = qIndex - Math.floor(composition.length / 2);
+      const startQ = Math.max(
+        0,
+        Math.min(requestedStartQ, quantumGrid.length - composition.length),
+      );
+      const placement = composition.map((type, offset) => ({ q: startQ + offset, type }));
+      const canPlace = composition.length > 1 && placement.every(({ q }) =>
+        q >= 0 && q < quantumGrid.length && !quantumGrid[q][sIndex],
+      );
+      if (!canPlace) {
+        setConnectionNotice('複合ゲートを配置できる空きがありません。');
+        return;
+      }
+
+      pushQuantumHistory();
+      const pairId = Date.now() + Math.random();
+      const newGrid = [...quantumGrid.map(row => [...row])];
+      placement.forEach(({ q, type }, offset) => {
+        newGrid[q][sIndex] = {
+          type,
+          id: Date.now() + offset,
+          role: type === 'CTRL' ? 'control' : 'target',
+          pairId,
+        };
+      });
+      setQuantumGrid(newGrid);
+    } else if (mode === 'new') {
       pushQuantumHistory();
       const gateType = e.dataTransfer.getData('gateType').toUpperCase();
       const newGrid = [...quantumGrid.map(row => [...row])];
