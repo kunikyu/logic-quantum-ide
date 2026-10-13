@@ -10,6 +10,10 @@ import logging
 plt.switch_backend('Agg')
 logging.basicConfig(level=logging.INFO)
 
+def _format_complex(value) -> str:
+    """計算過程へ渡す複素数を、精度を落とさず文字列化する。"""
+    return f'{value.real:.12f}{value.imag:+.12f}j'
+
 def run_simulation(circuit_definition: list, shots: int = 1024, num_qubits: int = 2) -> dict:
     try:
         safe_num_qubits = max(num_qubits, 2)
@@ -60,13 +64,13 @@ def run_simulation(circuit_definition: list, shots: int = 1024, num_qubits: int 
                     if (x*x + y*y + z*z) < 0.99:
                         qubits_state.append("ENTANGLED")
                     else:
-                        qubits_state.append([f"{complex(v):.3f}" for v in local_svs[i].data])
+                        qubits_state.append([_format_complex(complex(v)) for v in local_svs[i].data])
                 except Exception:
                     qubits_state.append("Unknown")
 
             calc_steps.append({
                 'label': label,
-                'statevector': [f"{complex(v):.3f}" for v in sv.data],
+                'statevector': [_format_complex(complex(v)) for v in sv.data],
                 'qubits_state': qubits_state,
                 'qubits': qubits,
                 'slot': slot
@@ -209,7 +213,7 @@ def run_simulation(circuit_definition: list, shots: int = 1024, num_qubits: int 
         bloch_vectors = []
 
         if statevector_obj:
-            statevector_list = [f"{complex(v):.3f}" for v in statevector_obj.data]
+            statevector_list = [_format_complex(complex(v)) for v in statevector_obj.data]
             for i in range(safe_num_qubits):
                 try:
                     trace_over = [q for q in range(safe_num_qubits) if q != i]

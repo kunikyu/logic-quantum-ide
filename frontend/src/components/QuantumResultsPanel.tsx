@@ -45,30 +45,16 @@ const parseStatevector = (sv: any[]): StateData[] => {
 
 const formatRoot = (val: number): string => {
   if (Math.abs(val) < 1e-6) return '0';
-  const sq = val * val;
-  let h1 = 1, h2 = 0, k1 = 0, k2 = 1;
-  let b = sq;
-  for (let i = 0; i < 15; i++) {
-    let a = Math.floor(b);
-    let aux = h1; h1 = a * h1 + h2; h2 = aux;
-    aux = k1; k1 = a * k1 + k2; k2 = aux;
-    b = 1 / (b - a);
-    if (Math.abs(sq - h1 / k1) < 1e-5) break;
-  }
-  const n = h1;
-  const d = k1;
-  
-  if (Math.abs(sq - n / d) > 1e-4) return val.toFixed(4);
-
   const signStr = val < 0 ? '-' : '';
-  const isPerfectSquare = (x: number) => Number.isInteger(Math.sqrt(x));
-  
-  const numStr = isPerfectSquare(n) ? Math.sqrt(n).toString() : `√${n}`;
-  const denStr = isPerfectSquare(d) ? Math.sqrt(d).toString() : `√${d}`;
-  
-  if (d === 1) return `${signStr}${numStr}`;
-  if (numStr === '0') return '0';
-  return `${signStr}${numStr}/${denStr}`;
+  const magnitude = Math.abs(val);
+  const knownValues: [number, string][] = [
+    [Math.SQRT1_2, '√2/2'],
+    [0.5, '1/2'],
+    [Math.sqrt(3) / 2, '√3/2'],
+  ];
+  const known = knownValues.find(([value]) => Math.abs(magnitude - value) < 2e-4);
+  if (known) return `${signStr}${known[1]}`;
+  return `${signStr}${magnitude.toFixed(4)}`;
 };
 
 const formatComplexRoot = (real: number, imag: number): string => {
