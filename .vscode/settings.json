@@ -4,5 +4,6 @@
             "approve": true,
             "matchCommandLine": true
         }
-    }
+    },
+    "python.defaultInterpreterPath": "${workspaceFolder}/backend/venv/Scripts/python.exe"
 }

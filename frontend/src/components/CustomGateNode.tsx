@@ -27,46 +27,52 @@ import type { GateNodeData, GateType } from '../store/useCircuitStore';
 // ============================================================
 // ゲート設定辞書
 // ============================================================
-interface GateConfig {
+import { GATE_CONFIGS, type GateVisualConfig } from '../constants/gates';
+
+interface GateConfig extends GateVisualConfig {
   icon: React.ReactNode;
-  label: string;
-  borderColor: string;
-  bgColor: string;
-  textColor: string;
-  glowColor: string;
-  category: 'logic' | 'quantum';
 }
 
 const ICON = 18;
 
-const GATE_CONFIG: Record<GateType, GateConfig> = {
-  AND:      { icon: <GitMerge   size={ICON}/>, label:'AND',    borderColor:'#5b8df6', bgColor:'rgba(91,141,246,0.10)',  textColor:'#7eb3fa', glowColor:'rgba(91,141,246,0.25)',  category:'logic'   },
-  OR:       { icon: <Layers     size={ICON}/>, label:'OR',     borderColor:'#38bdf8', bgColor:'rgba(56,189,248,0.10)',  textColor:'#7dd3fc', glowColor:'rgba(56,189,248,0.25)',  category:'logic'   },
-  NOT:      { icon: <FlipHorizontal size={ICON}/>, label:'NOT',borderColor:'#f87171', bgColor:'rgba(248,113,113,0.10)',textColor:'#fca5a5', glowColor:'rgba(248,113,113,0.25)', category:'logic'   },
-  NAND:     { icon: <ShieldOff  size={ICON}/>, label:'NAND',   borderColor:'#fb923c', bgColor:'rgba(251,146,60,0.10)',  textColor:'#fdba74', glowColor:'rgba(251,146,60,0.25)',  category:'logic'   },
-  NOR:      { icon: <ShieldOff  size={ICON}/>, label:'NOR',    borderColor:'#eab308', bgColor:'rgba(234,179,8,0.10)',   textColor:'#fde047', glowColor:'rgba(234,179,8,0.25)',   category:'logic'   },
-  XOR:      { icon: <Shuffle    size={ICON}/>, label:'XOR',    borderColor:'#34d399', bgColor:'rgba(52,211,153,0.10)',  textColor:'#6ee7b7', glowColor:'rgba(52,211,153,0.25)',  category:'logic'   },
-  Switch:   { icon: <ToggleLeft size={ICON}/>, label:'SW',     borderColor:'#22d3a0', bgColor:'rgba(34,211,160,0.10)',  textColor:'#5eead4', glowColor:'rgba(34,211,160,0.25)',  category:'logic'   },
-  LED:      { icon: <Lightbulb  size={ICON}/>, label:'LED',    borderColor:'#facc15', bgColor:'rgba(250,204,21,0.10)',  textColor:'#fde68a', glowColor:'rgba(250,204,21,0.30)',  category:'logic'   },
-  Clock:    { icon: <Clock      size={ICON}/>, label:'CLK',    borderColor:'#f59e0b', bgColor:'rgba(245,158,11,0.10)',  textColor:'#fcd34d', glowColor:'rgba(245,158,11,0.30)',  category:'logic'   },
-  SevenSeg: { icon: <Hash       size={ICON}/>, label:'7-SEG',  borderColor:'#e879f9', bgColor:'rgba(232,121,249,0.10)',textColor:'#f0abfc', glowColor:'rgba(232,121,249,0.25)', category:'logic'   },
-  H:        { icon: <Atom       size={ICON}/>, label:'H',      borderColor:'#a855f7', bgColor:'rgba(168,85,247,0.12)',  textColor:'#c084fc', glowColor:'rgba(168,85,247,0.30)',  category:'quantum' },
-  X:        { icon: <RefreshCw  size={ICON}/>, label:'X',      borderColor:'#818cf8', bgColor:'rgba(129,140,248,0.12)',textColor:'#a5b4fc', glowColor:'rgba(129,140,248,0.30)', category:'quantum' },
-  Y:        { icon: <RefreshCcw size={ICON}/>, label:'Y',      borderColor:'#6366f1', bgColor:'rgba(99,102,241,0.12)', textColor:'#818cf8', glowColor:'rgba(99,102,241,0.30)',  category:'quantum' },
-  Z:        { icon: <Zap        size={ICON}/>, label:'Z',      borderColor:'#4f78c7', bgColor:'rgba(79,120,199,0.12)',  textColor:'#91afe6', glowColor:'rgba(79,120,199,0.30)',  category:'quantum' },
-  S:        { icon: <Sigma      size={ICON}/>, label:'S',      borderColor:'#9333ea', bgColor:'rgba(147,51,234,0.12)', textColor:'#c084fc', glowColor:'rgba(147,51,234,0.30)',  category:'quantum' },
-  T:        { icon: <Timer      size={ICON}/>, label:'T',      borderColor:'#c026d3', bgColor:'rgba(192,38,211,0.12)', textColor:'#e879f9', glowColor:'rgba(192,38,211,0.30)',  category:'quantum' },
-  CX:       { icon: <Link       size={ICON}/>, label:'CX',     borderColor:'#7c3aed', bgColor:'rgba(124,58,237,0.12)', textColor:'#a78bfa', glowColor:'rgba(124,58,237,0.30)',  category:'quantum' },
-  CZ:       { icon: <Link2      size={ICON}/>, label:'CZ',     borderColor:'#7c3aed', bgColor:'rgba(124,58,237,0.12)', textColor:'#a78bfa', glowColor:'rgba(124,58,237,0.30)',  category:'quantum' },
-  CCX:      { icon: <Link2      size={ICON}/>, label:'CCX',    borderColor:'#6d28d9', bgColor:'rgba(109,40,217,0.12)', textColor:'#8b5cf6', glowColor:'rgba(109,40,217,0.30)',  category:'quantum' },
-  CCZ:      { icon: <Link2      size={ICON}/>, label:'CCZ',    borderColor:'#4f78c7', bgColor:'rgba(79,120,199,0.12)', textColor:'#91afe6', glowColor:'rgba(79,120,199,0.30)',  category:'quantum' },
-  MCX:      { icon: <Link2      size={ICON}/>, label:'MCX',    borderColor:'#6d28d9', bgColor:'rgba(109,40,217,0.12)', textColor:'#8b5cf6', glowColor:'rgba(109,40,217,0.30)',  category:'quantum' },
-  MCZ:      { icon: <Link2      size={ICON}/>, label:'MCZ',    borderColor:'#4f78c7', bgColor:'rgba(79,120,199,0.12)', textColor:'#91afe6', glowColor:'rgba(79,120,199,0.30)',  category:'quantum' },
-  CTRL:     { icon: <Circle fill="currentColor" size={ICON}/>, label:'CTRL',   borderColor:'#6d28d9', bgColor:'rgba(109,40,217,0.12)', textColor:'#8b5cf6', glowColor:'rgba(109,40,217,0.30)',  category:'quantum' },
-  Measure:  { icon: <Gauge      size={ICON}/>, label:'M',      borderColor:'#db2777', bgColor:'rgba(219,39,119,0.12)', textColor:'#f472b6', glowColor:'rgba(219,39,119,0.30)',  category:'quantum' },
-  CustomIC: { icon: <Layers     size={ICON}/>, label:'IC',     borderColor:'#10b981', bgColor:'rgba(16,185,129,0.10)', textColor:'#34d399', glowColor:'rgba(16,185,129,0.25)',  category:'logic'   },
-  Junction: { icon: <div style={{width:'10px',height:'10px',borderRadius:'50%',backgroundColor:'#60a5fa',display:'inline-block'}}/>, label:'JNC', borderColor:'#60a5fa', bgColor:'rgba(96,165,250,0.12)', textColor:'#93c5fd', glowColor:'rgba(96,165,250,0.4)', category:'logic' },
+const GATE_ICONS: Record<GateType, React.ReactNode> = {
+  AND:      <GitMerge size={ICON}/>,
+  OR:       <Layers size={ICON}/>,
+  NOT:      <FlipHorizontal size={ICON}/>,
+  NAND:     <ShieldOff size={ICON}/>,
+  NOR:      <ShieldOff size={ICON}/>,
+  XOR:      <Shuffle size={ICON}/>,
+  Switch:   <ToggleLeft size={ICON}/>,
+  LED:      <Lightbulb size={ICON}/>,
+  Clock:    <Clock size={ICON}/>,
+  SevenSeg: <Hash size={ICON}/>,
+  H:        <Atom size={ICON}/>,
+  X:        <RefreshCw size={ICON}/>,
+  Y:        <RefreshCcw size={ICON}/>,
+  Z:        <Zap size={ICON}/>,
+  S:        <Sigma size={ICON}/>,
+  T:        <Timer size={ICON}/>,
+  CX:       <Link size={ICON}/>,
+  CZ:       <Link2 size={ICON}/>,
+  CCX:      <Link2 size={ICON}/>,
+  CCZ:      <Link2 size={ICON}/>,
+  MCX:      <Link2 size={ICON}/>,
+  MCZ:      <Link2 size={ICON}/>,
+  CTRL:     <Circle fill="currentColor" size={ICON}/>,
+  Measure:  <Gauge size={ICON}/>,
+  CustomIC: <Layers size={ICON}/>,
+  Junction: <div style={{width:'10px',height:'10px',borderRadius:'50%',backgroundColor:'#60a5fa',display:'inline-block'}}/>,
 };
+
+const GATE_CONFIG: Record<GateType, GateConfig> = Object.fromEntries(
+  (Object.keys(GATE_CONFIGS) as GateType[]).map((type) => [
+    type,
+    {
+      ...GATE_CONFIGS[type],
+      icon: GATE_ICONS[type],
+    },
+  ])
+) as Record<GateType, GateConfig>;
 
 // Handle 等間隔配置の計算
 const calcHandleTop = (index: number, total: number): string =>

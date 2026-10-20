@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from models import CircuitGraphRequest, SimulationResponse, ChatRequest, ChatResponse, TruthTableResponse, LogicExpressionResponse, QuantumRequest
-from simulator import simulate, extract_logic_expressions
+from simulator import simulate, extract_logic_expressions, generate_truth_table
 from quantum_simulator import run_simulation
 from ai_agent import generate_response
 
@@ -147,75 +147,7 @@ def export_logisim_ep(request: CircuitGraphRequest) -> str:
 @app.post("/api/truthtable", response_model=TruthTableResponse)
 def truth_table(request: CircuitGraphRequest) -> TruthTableResponse:
     """Switch / Clock の全組み合わせを1ステップ実行し、LED / SevenSeg 出力との対応表を返す"""
-    from models import NodeData, NodeModel, Position, TruthTableRow
-
-    # Switch と Clock を入力変数として扱う
-    input_nodes = [n for n in request.nodes if n.data.gateType in ('Switch', 'Clock')]
-    led_nodes   = [n for n in request.nodes if n.data.gateType in ('LED', 'SevenSeg')]
-
-    if not input_nodes:
-        return TruthTableResponse(
-            inputLabels=[], outputLabels=[], rows=[],
-            error='Switch / Clock ノードが回路にありません'
-        )
-    if len(input_nodes) > 8:
-        return TruthTableResponse(
-            inputLabels=[], outputLabels=[], rows=[],
-            error='入力数が多すぎます（最大8ビット）'
-        )
-
-    def node_label(node, fallback_prefix: str, idx: int) -> str:
-        """params.label → data.label → フォールバック名の優先順位でラベルを返す"""
-        custom = (node.data.params or {}).get('label', '')
-        if custom:
-            return str(custom)
-        if node.data.label and node.data.label not in ('Switch', 'LED', 'SevenSeg', 'CLK', 'Clock'):
-            return node.data.label
-        return f"{fallback_prefix}_{idx + 1}"
-
-    def fallback_for(node, idx):
-        return 'CLK' if node.data.gateType == 'Clock' else 'SW'
-
-    input_labels  = [node_label(n, fallback_for(n, i), i) for i, n in enumerate(input_nodes)]
-    output_labels = [node_label(ld, 'LED', i) for i, ld in enumerate(led_nodes)]
-    n_in = len(input_nodes)
-    rows = []
-
-    input_id_set = {n.id for n in input_nodes}
-
-    for combo in range(2 ** n_in):
-        vals = [(combo >> (n_in - 1 - i)) & 1 for i in range(n_in)]
-
-        # Switch / Clock を固定値の Switch 相当ノードに置き換える
-        modified: list = []
-        for i, inp in enumerate(input_nodes):
-            new_params = {**(inp.data.params or {}), 'value': vals[i]}
-            # Clock は一時的に Switch として扱い、時変動作を無効化する
-            new_data = NodeData(
-                gateType='Switch',
-                label=inp.data.label,
-                handles=inp.data.handles,
-                params=new_params,
-            )
-            modified.append(NodeModel(id=inp.id, type=inp.type, position=inp.position, data=new_data))
-        modified.extend(n for n in request.nodes if n.id not in input_id_set)
-
-        req    = CircuitGraphRequest(
-            nodes=modified, edges=request.edges, steps=1, startStep=0,
-            customModules=request.customModules,
-        )
-        result = simulate(req)
-
-        rows.append(TruthTableRow(
-            inputs  = {input_labels[i]: vals[i] for i in range(n_in)},
-            outputs = {
-                output_labels[i]: result.timingData.get(ld.id, [0])[0]
-                for i, ld in enumerate(led_nodes)
-            },
-        ))
-
-    logger.info(f"真理値表: {n_in} 入力, {len(led_nodes)} 出力, {len(rows)} 行")
-    return TruthTableResponse(inputLabels=input_labels, outputLabels=output_labels, rows=rows)
+    return generate_truth_table(request)
 
 
 # ============================================================

@@ -25,9 +25,7 @@ def _simulate_quantum(quantum_nodes: List[NodeModel], edges: List[EdgeModel]) ->
     if not quantum_nodes:
         return {}
     try:
-        import numpy as np
-        from qiskit import QuantumCircuit
-        from qiskit_aer import AerSimulator
+        from quantum_simulator import run_simulation
 
         q_ids = {n.id for n in quantum_nodes}
         q_inputs: Dict[str, set] = defaultdict(set)
@@ -47,37 +45,33 @@ def _simulate_quantum(quantum_nodes: List[NodeModel], edges: List[EdgeModel]) ->
                 if node.id not in qubit_map:
                     qubit_map[node.id] = 0
 
-        qc = QuantumCircuit(n_qubits)
-        for node in quantum_nodes:
-            gate = node.data.gateType
+        ops = []
+        for i, node in enumerate(quantum_nodes):
+            gate = node.data.gateType.lower()
             q = qubit_map.get(node.id, 0)
-            if gate == 'H':
-                qc.h(q)
-            elif gate == 'X':
-                qc.x(q)
-            elif gate == 'Y':
-                qc.y(q)
-            elif gate == 'Z':
-                qc.z(q)
-            elif gate == 'S':
-                qc.s(q)
-            elif gate == 'T':
-                qc.t(q)
-            elif gate == 'CX' and n_qubits >= 2:
-                qc.cx(q, (q + 1) % n_qubits)
-            elif gate == 'CCX' and n_qubits >= 3:
-                qc.ccx(0, 1, 2)
+            if gate in ('h', 'x', 'y', 'z', 's', 't'):
+                ops.append({'gate': gate, 'qubit': q, 'slot': i})
+            elif gate == 'cx' and n_qubits >= 2:
+                ops.append({'gate': 'cx', 'qubits': [q, (q + 1) % n_qubits], 'slot': i})
+            elif gate == 'ccx' and n_qubits >= 3:
+                ops.append({'gate': 'ccx', 'qubits': [0, 1, 2], 'slot': i})
 
-        qc.save_statevector()
-        sim = AerSimulator(method='statevector')
-        result = sim.run(qc).result()
-        sv = np.array(result.get_statevector(qc))
-        probs = {
-            format(i, f'0{n_qubits}b'): round(float(abs(amp) ** 2), 4)
-            for i, amp in enumerate(sv)
-            if abs(amp) ** 2 > 1e-6
-        }
-        return {'n_qubits': n_qubits, 'probabilities': probs, 'circuit_depth': qc.depth()}
+        res = run_simulation(ops, num_qubits=n_qubits)
+        if 'error' in res:
+            return {'error': res['error'], 'n_qubits': 0, 'probabilities': {}}
+
+        sv_data = res.get('statevector', [])
+        probs = {}
+        for idx, val_str in enumerate(sv_data):
+            try:
+                c_val = complex(val_str)
+                prob = round(float(abs(c_val) ** 2), 4)
+                if prob > 1e-6:
+                    probs[format(idx, f'0{n_qubits}b')] = prob
+            except Exception:
+                pass
+
+        return {'n_qubits': n_qubits, 'probabilities': probs, 'circuit_depth': len(ops)}
     except Exception as exc:
         logger.warning(f'量子シミュレーションエラー: {exc}')
         return {'error': str(exc), 'n_qubits': 0, 'probabilities': {}}
@@ -474,4 +468,73 @@ def extract_logic_expressions(request: CircuitGraphRequest) -> 'LogicExpressionR
             }
             
     return LogicExpressionResponse(expressions=expressions)
+
+
+def generate_truth_table(request: CircuitGraphRequest) -> 'TruthTableResponse':
+    """Switch / Clock の全組み合わせを1ステップ実行し、LED / SevenSeg 出力との対応表を返す"""
+    from models import NodeData, NodeModel, TruthTableRow, TruthTableResponse
+
+    input_nodes = [n for n in request.nodes if n.data.gateType in ('Switch', 'Clock')]
+    led_nodes   = [n for n in request.nodes if n.data.gateType in ('LED', 'SevenSeg')]
+
+    if not input_nodes:
+        return TruthTableResponse(
+            inputLabels=[], outputLabels=[], rows=[],
+            error='Switch / Clock ノードが回路にありません'
+        )
+    if len(input_nodes) > 8:
+        return TruthTableResponse(
+            inputLabels=[], outputLabels=[], rows=[],
+            error='入力数が多すぎます（最大8ビット）'
+        )
+
+    def node_label(node, fallback_prefix: str, idx: int) -> str:
+        custom = (node.data.params or {}).get('label', '')
+        if custom:
+            return str(custom)
+        if node.data.label and node.data.label not in ('Switch', 'LED', 'SevenSeg', 'CLK', 'Clock'):
+            return node.data.label
+        return f"{fallback_prefix}_{idx + 1}"
+
+    def fallback_for(node, idx):
+        return 'CLK' if node.data.gateType == 'Clock' else 'SW'
+
+    input_labels  = [node_label(n, fallback_for(n, i), i) for i, n in enumerate(input_nodes)]
+    output_labels = [node_label(ld, 'LED', i) for i, ld in enumerate(led_nodes)]
+    n_in = len(input_nodes)
+    rows = []
+
+    input_id_set = {n.id for n in input_nodes}
+
+    for combo in range(2 ** n_in):
+        vals = [(combo >> (n_in - 1 - i)) & 1 for i in range(n_in)]
+
+        modified: list = []
+        for i, inp in enumerate(input_nodes):
+            new_params = {**(inp.data.params or {}), 'value': vals[i]}
+            new_data = NodeData(
+                gateType='Switch',
+                label=inp.data.label,
+                handles=inp.data.handles,
+                params=new_params,
+            )
+            modified.append(NodeModel(id=inp.id, type=inp.type, position=inp.position, data=new_data))
+        modified.extend(n for n in request.nodes if n.id not in input_id_set)
+
+        req = CircuitGraphRequest(
+            nodes=modified, edges=request.edges, steps=1, startStep=0,
+            customModules=request.customModules,
+        )
+        result = simulate(req)
+
+        rows.append(TruthTableRow(
+            inputs  = {input_labels[i]: vals[i] for i in range(n_in)},
+            outputs = {
+                output_labels[i]: result.timingData.get(ld.id, [0])[0]
+                for i, ld in enumerate(led_nodes)
+            },
+        ))
+
+    logger.info(f"真理値表: {n_in} 入力, {len(led_nodes)} 出力, {len(rows)} 行")
+    return TruthTableResponse(inputLabels=input_labels, outputLabels=output_labels, rows=rows)
 

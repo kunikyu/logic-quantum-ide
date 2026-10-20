@@ -36,16 +36,41 @@ def _build_qubit_map(q_nodes, edges):
             if nd.id not in qmap: qmap[nd.id] = 0
     return qmap, n_q
 
-def _apply_qc(qc, gate, q, n_q):
+def _get_gate_qubits(node, edges, qmap, default_q, num_inputs=2):
+    in_edges = {
+        int((e.targetHandle or 'in-0').split('-')[-1]): e.source
+        for e in edges if e.target == node.id
+    }
+    qubits = []
+    n_q = max(1, len(qmap))
+    for i in range(num_inputs):
+        if i in in_edges and in_edges[i] in qmap:
+            qubits.append(qmap[in_edges[i]])
+        else:
+            qubits.append((default_q + i) % n_q)
+    return qubits
+
+def _apply_qc(qc, node, edges, qmap, n_q):
+    gate = node.data.gateType
+    q = qmap.get(node.id, 0)
     if gate=='H': qc.h(q)
     elif gate=='X': qc.x(q)
     elif gate=='Y': qc.y(q)
     elif gate=='Z': qc.z(q)
     elif gate=='S': qc.s(q)
     elif gate=='T': qc.t(q)
-    elif gate=='CX' and n_q>=2: qc.cx(q,(q+1)%n_q)
-    elif gate=='CCX' and n_q>=3: qc.ccx(0,1,2)
-    elif gate=='Measure': qc.measure(q,q)
+    elif gate=='CX' and n_q>=2:
+        qs = _get_gate_qubits(node, edges, qmap, q, 2)
+        if qs[0] == qs[1]: qs[1] = (qs[0] + 1) % n_q
+        qc.cx(qs[0], qs[1])
+    elif gate=='CZ' and n_q>=2:
+        qs = _get_gate_qubits(node, edges, qmap, q, 2)
+        if qs[0] == qs[1]: qs[1] = (qs[0] + 1) % n_q
+        qc.cz(qs[0], qs[1])
+    elif gate=='CCX' and n_q>=3:
+        qs = _get_gate_qubits(node, edges, qmap, q, 3)
+        qc.ccx(qs[0], qs[1], qs[2])
+    elif gate=='Measure': qc.measure(q, q)
 
 # ============================================================
 # QASM 2.0
@@ -61,7 +86,7 @@ def export_qasm(nodes: List[NodeModel], edges: List[EdgeModel]) -> str:
         qc = QuantumCircuit(n_q, n_q if has_m else 0)
         for nd in _topo(q_nodes, edges):
             if nd.data.gateType in QUANTUM_GATES:
-                _apply_qc(qc, nd.data.gateType, qmap.get(nd.id,0), n_q)
+                _apply_qc(qc, nd, edges, qmap, n_q)
         try:
             from qiskit.qasm2 import dumps; return dumps(qc)
         except ImportError:
@@ -91,8 +116,17 @@ def export_python(nodes: List[NodeModel], edges: List[EdgeModel]) -> str:
             elif g=='Z': L.append(f'qc.z({q})')
             elif g=='S': L.append(f'qc.s({q})')
             elif g=='T': L.append(f'qc.t({q})')
-            elif g=='CX' and n_q>=2: L.append(f'qc.cx({q},{(q+1)%n_q})')
-            elif g=='CCX' and n_q>=3: L.append('qc.ccx(0,1,2)')
+            elif g=='CX' and n_q>=2:
+                qs = _get_gate_qubits(nd, edges, qmap, q, 2)
+                if qs[0] == qs[1]: qs[1] = (qs[0] + 1) % n_q
+                L.append(f'qc.cx({qs[0]},{qs[1]})')
+            elif g=='CZ' and n_q>=2:
+                qs = _get_gate_qubits(nd, edges, qmap, q, 2)
+                if qs[0] == qs[1]: qs[1] = (qs[0] + 1) % n_q
+                L.append(f'qc.cz({qs[0]},{qs[1]})')
+            elif g=='CCX' and n_q>=3:
+                qs = _get_gate_qubits(nd, edges, qmap, q, 3)
+                L.append(f'qc.ccx({qs[0]},{qs[1]},{qs[2]})')
             elif g=='Measure': L.append(f'qc.measure({q},{q})')
     L += ['','# シミュレーション','qc.save_statevector()',
           "sim = AerSimulator(method='statevector')",
