@@ -1,6 +1,4 @@
-# User Requested Exclusions
-minamino-main/
-minamino-main
+.vscode/
 
 # Python
 __pycache__/
@@ -71,5 +69,4 @@ Thumbs.db
 
 # other
 temp.txt
-icthesis_template.tex
 prompt_memo.txt
