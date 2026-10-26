@@ -3,6 +3,7 @@ import io
 import base64
 import logging
 from typing import Any, Dict, List, Tuple
+from equation import SymbolicSimulator
 
 import matplotlib.pyplot as plt
 from qiskit import QuantumCircuit, transpile
@@ -194,6 +195,10 @@ def run_simulation(circuit_definition: list, shots: int = 1024, num_qubits: int 
                 'qubits': all_op_qubits,
                 'slot': slot - 1
             })
+
+        # SymbolicSimulatorによるLaTeX数式履歴の生成
+        sym_sim = SymbolicSimulator(safe_num_qubits)
+        history = sym_sim.apply_qiskit_circuit(qc)
 
         # 回路図（Matplotlib）の描画
         fig = None
