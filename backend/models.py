@@ -10,6 +10,22 @@ class HandleConfig(BaseModel):
     outputs: int
 
 
+DEFAULT_GATE_HANDLES: Dict[str, Dict[str, int]] = {
+    'AND': {'inputs': 2, 'outputs': 1}, 'OR': {'inputs': 2, 'outputs': 1},
+    'NOT': {'inputs': 1, 'outputs': 1}, 'NAND': {'inputs': 2, 'outputs': 1},
+    'NOR': {'inputs': 2, 'outputs': 1}, 'XOR': {'inputs': 2, 'outputs': 1},
+    'Switch': {'inputs': 0, 'outputs': 1}, 'LED': {'inputs': 1, 'outputs': 0},
+    'Clock': {'inputs': 0, 'outputs': 1}, 'SevenSeg': {'inputs': 4, 'outputs': 0},
+    'H': {'inputs': 1, 'outputs': 1}, 'X': {'inputs': 1, 'outputs': 1},
+    'Y': {'inputs': 1, 'outputs': 1}, 'Z': {'inputs': 1, 'outputs': 1},
+    'S': {'inputs': 1, 'outputs': 1}, 'T': {'inputs': 1, 'outputs': 1},
+    'CX': {'inputs': 2, 'outputs': 2}, 'CZ': {'inputs': 2, 'outputs': 2},
+    'CCX': {'inputs': 3, 'outputs': 3}, 'CCZ': {'inputs': 3, 'outputs': 3},
+    'MCX': {'inputs': 4, 'outputs': 4}, 'MCZ': {'inputs': 4, 'outputs': 4},
+    'Measure': {'inputs': 1, 'outputs': 1}, 'Junction': {'inputs': 1, 'outputs': 2},
+}
+
+
 class NodeData(BaseModel):
     gateType: str
     label: str

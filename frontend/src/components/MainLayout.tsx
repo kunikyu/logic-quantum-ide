@@ -26,6 +26,8 @@ import QuantumCircuitCanvas from './QuantumCircuitCanvas';
 import LogicExpressionPanel from './LogicExpressionPanel';
 import useCircuitStore from '../store/useCircuitStore';
 import { calculateElkLayout } from '../utils/autoLayout';
+import { useCircuitExport } from '../hooks/useCircuitExport';
+import { API_BASE } from '../api/client';
 
 // ============================================================
 // リサイズハンドル スタイル
@@ -52,7 +54,7 @@ interface AppHeaderProps {
 import type { EdgeMode } from '../store/useCircuitStore';
 
 const AppHeader: React.FC<AppHeaderProps> = ({ onResetLayout }) => {
-  const [showExport, setShowExport] = useState(false);
+  const { showExport, setShowExport, downloadFile, exportFetch } = useCircuitExport();
   const fileRef = useRef<HTMLInputElement>(null);
   const { 
     mode, quantumGrid, quantumNumQubits, quantumNumSlots, setQuantumSimulationResult,
@@ -60,7 +62,6 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onResetLayout }) => {
     nodes, edges, loadCircuit, applyLayout, edgeType, setEdgeType, 
     showLogicPanel, showMiniMap, toggleLogicPanel, toggleMiniMap 
   } = useCircuitStore();
-  const API = 'http://localhost:8000';
 
   useEffect(() => {
     if (!connectionNotice) return;
@@ -68,16 +69,11 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onResetLayout }) => {
     return () => window.clearTimeout(timer);
   }, [connectionNotice, setConnectionNotice]);
 
-  const dl = (content: string, filename: string) => {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([content]));
-    a.download = filename; a.click();
-  };
   const handleSave = () => {
     const data = mode === 'logic'
       ? { type: 'quantum_ide_project', mode: 'logic', logicData: { nodes, edges } }
       : { type: 'quantum_ide_project', mode: 'quantum', quantumData: { grid: quantumGrid, numQubits: quantumNumQubits, numSlots: quantumNumSlots } };
-    dl(JSON.stringify(data, null, 2), 'circuit.json');
+    downloadFile(JSON.stringify(data, null, 2), 'circuit.json');
   };
   const handleOpen = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; if (!f) return;
@@ -88,16 +84,6 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onResetLayout }) => {
     };
     reader.readAsText(f); e.target.value = '';
   }, [loadCircuit]);
-  const exportFetch = async (path: string, filename: string) => {
-    setShowExport(false);
-    try {
-      const res = await fetch(`${API}${path}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nodes, edges }),
-      });
-      dl(await res.text(), filename);
-    } catch { alert('エクスポートに失敗しました。バックエンドが起動しているか確認してください。'); }
-  };
   const handleAutoLayout = useCallback(async () => {
     if (nodes.length === 0) return;
     try {
@@ -169,7 +155,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onResetLayout }) => {
       
       circuit.sort((a, b) => a.slot - b.slot);
 
-      const res = await fetch(`${API}/api/simulate/quantum`, {
+      const res = await fetch(`${API_BASE}/api/simulate/quantum`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ circuit, shots: 1024, num_qubits: quantumNumQubits }),
       });

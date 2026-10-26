@@ -3,8 +3,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Send, Bot, User, Loader2 } from 'lucide-react';
 import useCircuitStore from '../store/useCircuitStore';
 import type { GateType } from '../store/useCircuitStore';
-
-const API_BASE = 'http://localhost:8000';
+import { API_BASE } from '../api/client';
 
 interface Msg { role:'user'|'ai'; text:string; hasGhost?:boolean; }
 

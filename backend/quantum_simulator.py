@@ -1,184 +1,209 @@
-# backend/simulator.py
-from qiskit import QuantumCircuit, transpile
-from qiskit_aer import AerSimulator
-from qiskit.quantum_info import partial_trace, Pauli, Statevector
-import matplotlib.pyplot as plt
+# backend/quantum_simulator.py
 import io
 import base64
 import logging
-from equation import SymbolicSimulator
+from typing import Any, Dict, List, Tuple
+
+import matplotlib.pyplot as plt
+from qiskit import QuantumCircuit, transpile
+from qiskit.circuit.library import (
+    HGate, XGate, YGate, ZGate, SGate, TGate,
+    CXGate, CZGate, CCXGate, MCXGate,
+)
+from qiskit.quantum_info import partial_trace, Pauli, Statevector
+from qiskit_aer import AerSimulator
 
 plt.switch_backend('Agg')
-logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-def _format_complex(value) -> str:
+
+def _format_complex(value: complex) -> str:
     """計算過程へ渡す複素数を、精度を落とさず文字列化する。"""
     return f'{value.real:.12f}{value.imag:+.12f}j'
 
+
+def _calc_qubit_states_and_bloch(
+    sv: Statevector, num_qubits: int
+) -> Tuple[List[Any], List[List[float]]]:
+    """
+    Statevectorから各単一量子ビットの局所状態表現およびブロッホ球座標を厳密に計算する。
+    - もつれ状態の場合: "ENTANGLED"
+    - 純粋状態の場合: 密度行列・ブロッホ座標から厳密に再生した [α, β]
+    """
+    qubits_state: List[Any] = []
+    bloch_vectors: List[List[float]] = []
+
+    for i in range(num_qubits):
+        try:
+            trace_over = [q for q in range(num_qubits) if q != i]
+            rho_i = partial_trace(sv, trace_over)
+            x = float(rho_i.expectation_value(Pauli('X')).real)
+            y = float(rho_i.expectation_value(Pauli('Y')).real)
+            z = float(rho_i.expectation_value(Pauli('Z')).real)
+            bloch_vectors.append([x, y, z])
+
+            # ブロッホ球ベクトルのノルムの二乗（純粋度）
+            r2 = x * x + y * y + z * z
+            if r2 < 0.99:
+                qubits_state.append("ENTANGLED")
+            else:
+                # 純粋状態の復元: 基準位相として α を実数にとる
+                if 1.0 + z > 1e-6:
+                    alpha = ((1.0 + z) / 2.0) ** 0.5
+                    beta = complex(x, y) / (2.0 * alpha)
+                else:
+                    alpha = 0.0
+                    beta = complex(1.0, 0.0)
+                qubits_state.append([_format_complex(complex(alpha)), _format_complex(complex(beta))])
+        except Exception as exc:
+            logger.warning(f"Qubit {i} の状態計算に失敗: {exc}")
+            qubits_state.append("Unknown")
+            bloch_vectors.append([0.0, 0.0, 0.0])
+
+    return qubits_state, bloch_vectors
+
+
 def run_simulation(circuit_definition: list, shots: int = 1024, num_qubits: int = 2) -> dict:
+    """
+    量子回路のシミュレーションを実行し、状態ベクトル、ブロッホベクトル、ステップ履歴、作図、測定カウントを返す。
+    Statevector.evolve を活用して回路と状態の二重管理を排除し、O(N)で高速かつ数学的に厳密に計算する。
+    """
     try:
         safe_num_qubits = max(num_qubits, 2)
         num_classical_bits = safe_num_qubits
         qc = QuantumCircuit(safe_num_qubits, num_classical_bits)
+        current_sv = Statevector.from_label('0' * safe_num_qubits)
         measure_explicitly_added = False
+        measured_qubits: List[int] = []
 
-        logging.info(f"Creating circuit with {safe_num_qubits} qubits.")
+        logger.info(f"量子回路作成: {safe_num_qubits} qubits")
 
-        current_qc = QuantumCircuit(safe_num_qubits)
-        calc_steps = []
-        
-        from qiskit.circuit.library import HGate, XGate, YGate, ZGate, SGate, TGate
-        local_svs = [Statevector.from_label('0') for _ in range(safe_num_qubits)]
+        calc_steps: List[Dict[str, Any]] = []
 
-        def apply_local_gate(gate, op):
-            q = op.get('qubit')
-            if gate == 'h': local_svs[q] = local_svs[q].evolve(HGate())
-            elif gate == 'x': local_svs[q] = local_svs[q].evolve(XGate())
-            elif gate == 'y': local_svs[q] = local_svs[q].evolve(YGate())
-            elif gate == 'z': local_svs[q] = local_svs[q].evolve(ZGate())
-            elif gate == 's': local_svs[q] = local_svs[q].evolve(SGate())
-            elif gate == 't': local_svs[q] = local_svs[q].evolve(TGate())
-            elif gate == 'cx':
-                c, t = op['qubits'][0], op['qubits'][1]
-                if local_svs[c].probabilities()[1] > 0.999:
-                    local_svs[t] = local_svs[t].evolve(XGate())
-                if abs(local_svs[t].data[0] - 1/(2**0.5)) < 0.01 and abs(local_svs[t].data[1] + 1/(2**0.5)) < 0.01:
-                    local_svs[c] = local_svs[c].evolve(ZGate())
-            elif gate == 'cz':
-                c, t = op['qubits'][0], op['qubits'][1]
-                if local_svs[c].probabilities()[1] > 0.999:
-                    local_svs[t] = local_svs[t].evolve(ZGate())
-                elif local_svs[t].probabilities()[1] > 0.999:
-                    local_svs[c] = local_svs[c].evolve(ZGate())
+        # 初期ステップの記録
+        initial_qubits_state, _ = _calc_qubit_states_and_bloch(current_sv, safe_num_qubits)
+        calc_steps.append({
+            'label': '初期状態',
+            'statevector': [_format_complex(complex(v)) for v in current_sv.data],
+            'qubits_state': initial_qubits_state,
+            'qubits': [],
+            'slot': -1
+        })
 
-        def record_step(label, qubits=[], slot=-1):
-            sv = Statevector(current_qc)
-            qubits_state = []
-            for i in range(safe_num_qubits):
-                try:
-                    trace_over = [q for q in range(safe_num_qubits) if q != i]
-                    rho_i = partial_trace(sv, trace_over)
-                    x = rho_i.expectation_value(Pauli('X')).real
-                    y = rho_i.expectation_value(Pauli('Y')).real
-                    z = rho_i.expectation_value(Pauli('Z')).real
-                    
-                    if (x*x + y*y + z*z) < 0.99:
-                        qubits_state.append("ENTANGLED")
-                    else:
-                        qubits_state.append([_format_complex(complex(v)) for v in local_svs[i].data])
-                except Exception:
-                    qubits_state.append("Unknown")
-
-            calc_steps.append({
-                'label': label,
-                'statevector': [_format_complex(complex(v)) for v in sv.data],
-                'qubits_state': qubits_state,
-                'qubits': qubits,
-                'slot': slot
-            })
-        
-        record_step('初期状態', [], -1)
-
-        saved_state = False
-        measured_qubits = []
         for op in circuit_definition:
-            gate = op['gate']
-            all_op_qubits = []
-            if 'qubit' in op: all_op_qubits.append(op['qubit'])
-            if 'qubits' in op: all_op_qubits.extend(op['qubits'])
-            if 'controls' in op: all_op_qubits.extend(op['controls'])
-            if 'target' in op: all_op_qubits.append(op['target'])
-            if any(q >= safe_num_qubits for q in all_op_qubits): continue
+            gate = op.get('gate')
+            all_op_qubits: List[int] = []
+            if 'qubit' in op:
+                all_op_qubits.append(op['qubit'])
+            if 'qubits' in op:
+                all_op_qubits.extend(op['qubits'])
+            if 'controls' in op:
+                all_op_qubits.extend(op['controls'])
+            if 'target' in op:
+                all_op_qubits.append(op['target'])
 
-            if gate == 'measure' and not saved_state:
-                qc.save_statevector()
-                saved_state = True
-                
+            if any(q >= safe_num_qubits for q in all_op_qubits):
+                continue
+
             slot = op.get('slot', 0) + 1
 
             if gate == 'h':
-                qc.h(op['qubit']); current_qc.h(op['qubit'])
-                apply_local_gate(gate, op)
-                record_step(f"q{op['qubit']} → H    (q{op['qubit']}, {slot})", all_op_qubits, slot - 1)
+                q = op['qubit']
+                qc.h(q)
+                current_sv = current_sv.evolve(HGate(), [q])
+                label = f"q{q} → H    (q{q}, {slot})"
             elif gate == 'x':
-                qc.x(op['qubit']); current_qc.x(op['qubit'])
-                apply_local_gate(gate, op)
+                q = op['qubit']
+                qc.x(q)
+                current_sv = current_sv.evolve(XGate(), [q])
                 display_gate = op.get('original_type', 'X').upper()
-                record_step(f"q{op['qubit']} → {display_gate}    (q{op['qubit']}, {slot})", all_op_qubits, slot - 1)
+                label = f"q{q} → {display_gate}    (q{q}, {slot})"
             elif gate == 'y':
-                qc.y(op['qubit']); current_qc.y(op['qubit'])
-                apply_local_gate(gate, op)
-                record_step(f"q{op['qubit']} → Y    (q{op['qubit']}, {slot})", all_op_qubits, slot - 1)
+                q = op['qubit']
+                qc.y(q)
+                current_sv = current_sv.evolve(YGate(), [q])
+                label = f"q{q} → Y    (q{q}, {slot})"
             elif gate == 'z':
-                qc.z(op['qubit']); current_qc.z(op['qubit'])
-                apply_local_gate(gate, op)
+                q = op['qubit']
+                qc.z(q)
+                current_sv = current_sv.evolve(ZGate(), [q])
                 display_gate = op.get('original_type', 'Z').upper()
-                record_step(f"q{op['qubit']} → {display_gate}    (q{op['qubit']}, {slot})", all_op_qubits, slot - 1)
+                label = f"q{q} → {display_gate}    (q{q}, {slot})"
             elif gate == 's':
-                qc.s(op['qubit']); current_qc.s(op['qubit'])
-                apply_local_gate(gate, op)
-                record_step(f"q{op['qubit']} → S    (q{op['qubit']}, {slot})", all_op_qubits, slot - 1)
+                q = op['qubit']
+                qc.s(q)
+                current_sv = current_sv.evolve(SGate(), [q])
+                label = f"q{q} → S    (q{q}, {slot})"
             elif gate == 't':
-                qc.t(op['qubit']); current_qc.t(op['qubit'])
-                apply_local_gate(gate, op)
-                record_step(f"q{op['qubit']} → T    (q{op['qubit']}, {slot})", all_op_qubits, slot - 1)
+                q = op['qubit']
+                qc.t(q)
+                current_sv = current_sv.evolve(TGate(), [q])
+                label = f"q{q} → T    (q{q}, {slot})"
             elif gate == 'cx':
-                qc.cx(op['qubits'][0], op['qubits'][1]); current_qc.cx(op['qubits'][0], op['qubits'][1])
-                apply_local_gate(gate, op)
-                record_step(f"q{op['qubits'][0]} (ctrl), q{op['qubits'][1]} (tgt) → CX    (ctrl: q{op['qubits'][0]}, tgt: q{op['qubits'][1]}, {slot})", all_op_qubits, slot - 1)
+                c, t = op['qubits'][0], op['qubits'][1]
+                qc.cx(c, t)
+                current_sv = current_sv.evolve(CXGate(), [c, t])
+                label = f"q{c} (ctrl), q{t} (tgt) → CX    (ctrl: q{c}, tgt: q{t}, {slot})"
             elif gate == 'cz':
-                qc.cz(op['qubits'][0], op['qubits'][1]); current_qc.cz(op['qubits'][0], op['qubits'][1])
-                apply_local_gate(gate, op)
-                record_step(f"q{op['qubits'][0]} (ctrl), q{op['qubits'][1]} (tgt) → CZ    (ctrl: q{op['qubits'][0]}, tgt: q{op['qubits'][1]}, {slot})", all_op_qubits, slot - 1)
+                c, t = op['qubits'][0], op['qubits'][1]
+                qc.cz(c, t)
+                current_sv = current_sv.evolve(CZGate(), [c, t])
+                label = f"q{c} (ctrl), q{t} (tgt) → CZ    (ctrl: q{c}, tgt: q{t}, {slot})"
             elif gate == 'ccx':
-                qc.ccx(op['qubits'][0], op['qubits'][1], op['qubits'][2])
-                current_qc.ccx(op['qubits'][0], op['qubits'][1], op['qubits'][2])
-                record_step(f"q{op['qubits'][0]}, q{op['qubits'][1]} (ctrl), q{op['qubits'][2]} (tgt) → CCX    (ctrls: q{op['qubits'][0]}, q{op['qubits'][1]}, tgt: q{op['qubits'][2]}, {slot})", all_op_qubits, slot - 1)
+                c1, c2, t = op['qubits'][0], op['qubits'][1], op['qubits'][2]
+                qc.ccx(c1, c2, t)
+                current_sv = current_sv.evolve(CCXGate(), [c1, c2, t])
+                label = f"q{c1}, q{c2} (ctrl), q{t} (tgt) → CCX    (ctrls: q{c1}, q{c2}, tgt: q{t}, {slot})"
             elif gate == 'ccz':
-                qc.h(op['qubits'][2])
-                qc.ccx(op['qubits'][0], op['qubits'][1], op['qubits'][2])
-                qc.h(op['qubits'][2])
-                current_qc.h(op['qubits'][2])
-                current_qc.ccx(op['qubits'][0], op['qubits'][1], op['qubits'][2])
-                current_qc.h(op['qubits'][2])
-                record_step(f"q{op['qubits'][0]}, q{op['qubits'][1]} (ctrl), q{op['qubits'][2]} (tgt) → CCZ    (ctrls: q{op['qubits'][0]}, q{op['qubits'][1]}, tgt: q{op['qubits'][2]}, {slot})", all_op_qubits, slot - 1)
+                c1, c2, t = op['qubits'][0], op['qubits'][1], op['qubits'][2]
+                qc.h(t)
+                qc.ccx(c1, c2, t)
+                qc.h(t)
+                current_sv = current_sv.evolve(HGate(), [t]).evolve(CCXGate(), [c1, c2, t]).evolve(HGate(), [t])
+                label = f"q{c1}, q{c2} (ctrl), q{t} (tgt) → CCZ    (ctrls: q{c1}, q{c2}, tgt: q{t}, {slot})"
             elif gate == 'mcx':
-                qc.mcx(op['controls'], op['target'])
-                current_qc.mcx(op['controls'], op['target'])
-                ctrl_str = ', '.join([f"q{c}" for c in op['controls']])
-                record_step(f"{ctrl_str} (ctrl), q{op['target']} (tgt) → MCX    (ctrls: {ctrl_str}, tgt: q{op['target']}, {slot})", all_op_qubits, slot - 1)
+                ctrls, target = op['controls'], op['target']
+                qc.mcx(ctrls, target)
+                current_sv = current_sv.evolve(MCXGate(len(ctrls)), ctrls + [target])
+                ctrl_str = ', '.join([f"q{c}" for c in ctrls])
+                label = f"{ctrl_str} (ctrl), q{target} (tgt) → MCX    (ctrls: {ctrl_str}, tgt: q{target}, {slot})"
             elif gate == 'mcz':
-                qc.h(op['target'])
-                qc.mcx(op['controls'], op['target'])
-                qc.h(op['target'])
-                current_qc.h(op['target'])
-                current_qc.mcx(op['controls'], op['target'])
-                current_qc.h(op['target'])
-                ctrl_str = ', '.join([f"q{c}" for c in op['controls']])
-                record_step(f"{ctrl_str} (ctrl), q{op['target']} (tgt) → MCZ    (ctrls: {ctrl_str}, tgt: q{op['target']}, {slot})", all_op_qubits, slot - 1)
+                ctrls, target = op['controls'], op['target']
+                qc.h(target)
+                qc.mcx(ctrls, target)
+                qc.h(target)
+                current_sv = current_sv.evolve(HGate(), [target]).evolve(MCXGate(len(ctrls)), ctrls + [target]).evolve(HGate(), [target])
+                ctrl_str = ', '.join([f"q{c}" for c in ctrls])
+                label = f"{ctrl_str} (ctrl), q{target} (tgt) → MCZ    (ctrls: {ctrl_str}, tgt: q{target}, {slot})"
             elif gate == 'measure':
-                qc.measure(op['qubit'], op['qubit']) 
+                q = op['qubit']
+                qc.measure(q, q)
                 measure_explicitly_added = True
-                if op['qubit'] not in measured_qubits:
-                    measured_qubits.append(op['qubit'])
-        
-        if not saved_state:
-            qc.save_statevector()
+                if q not in measured_qubits:
+                    measured_qubits.append(q)
+                continue
+            else:
+                continue
 
-        simulator = SymbolicSimulator(num_qubits)
-        history = simulator.apply_qiskit_circuit(qc)
+            # ステップ結果を記録
+            step_qubits_state, _ = _calc_qubit_states_and_bloch(current_sv, safe_num_qubits)
+            calc_steps.append({
+                'label': label,
+                'statevector': [_format_complex(complex(v)) for v in current_sv.data],
+                'qubits_state': step_qubits_state,
+                'qubits': all_op_qubits,
+                'slot': slot - 1
+            })
 
+        # 回路図（Matplotlib）の描画
         fig = None
-        try:
-            fig = qc.draw(output='mpl', style='iqp')
-        except Exception:
+        for style in ('iqp', 'clifford', None):
             try:
-                fig = qc.draw(output='mpl', style='clifford')
+                fig = qc.draw(output='mpl', style=style) if style else qc.draw(output='mpl')
+                if fig:
+                    break
             except Exception:
-                try:
-                    fig = qc.draw(output='mpl')
-                except Exception:
-                    fig = None
+                continue
 
         if fig:
             buf = io.BytesIO()
@@ -190,56 +215,43 @@ def run_simulation(circuit_definition: list, shots: int = 1024, num_qubits: int 
             img_str = None
 
     except Exception as e:
-        logging.error(f"Error building circuit: {e}")
+        logger.error(f"回路構築中のエラー: {e}")
         return {'error': f'Error building circuit: {str(e)}'}
 
     try:
-        try:
-            num_shots = int(shots)
-            if num_shots <= 0: num_shots = 1024
-        except (ValueError, TypeError):
-            num_shots = 1024
-        
-        simulator = AerSimulator()
-        compiled_circuit = transpile(qc, simulator)
-        job = simulator.run(compiled_circuit, shots=num_shots) 
-        result = job.result()
-        
-        try:
-            counts = result.get_counts(qc)
-            if not measure_explicitly_added:
-                counts = {}
-        except Exception:
-            counts = {}
-        
-        statevector_obj = result.data().get('statevector')
-        statevector_list = []
-        bloch_vectors = []
+        # 測定カウントのシミュレーション（measureゲートが存在する場合のみ実行）
+        counts: Dict[str, int] = {}
+        if measure_explicitly_added:
+            try:
+                num_shots = int(shots)
+                if num_shots <= 0:
+                    num_shots = 1024
+            except (ValueError, TypeError):
+                num_shots = 1024
 
-        if statevector_obj:
-            statevector_list = [_format_complex(complex(v)) for v in statevector_obj.data]
-            for i in range(safe_num_qubits):
-                try:
-                    trace_over = [q for q in range(safe_num_qubits) if q != i]
-                    rho_i = partial_trace(statevector_obj, trace_over)
-                    x = rho_i.expectation_value(Pauli('X')).real
-                    y = rho_i.expectation_value(Pauli('Y')).real
-                    z = rho_i.expectation_value(Pauli('Z')).real
-                    bloch_vectors.append([x, y, z])
-                except Exception as e_bloch:
-                    logging.warning(f"Failed to calc bloch vector for q{i}: {e_bloch}")
-                    bloch_vectors.append([0, 0, 0])
+            simulator = AerSimulator()
+            compiled_circuit = transpile(qc, simulator)
+            job = simulator.run(compiled_circuit, shots=num_shots)
+            result = job.result()
+            try:
+                counts = result.get_counts(qc)
+            except Exception:
+                counts = {}
+
+        # 最終状態ベクトルおよびブロッホ球ベクトルの取得（二重計算を排除）
+        final_statevector_list = [_format_complex(complex(v)) for v in current_sv.data]
+        _, final_bloch_vectors = _calc_qubit_states_and_bloch(current_sv, safe_num_qubits)
 
         return {
             'counts': counts,
-            'statevector': statevector_list,
+            'statevector': final_statevector_list,
             'circuit_diagram': img_str,
-            'bloch_vectors': bloch_vectors,
+            'bloch_vectors': final_bloch_vectors,
             'measured_qubits': measured_qubits,
             'calc_steps': calc_steps,
             'latex': history
         }
 
     except Exception as e:
-        logging.error(f"Error during simulation: {e}")
+        logger.error(f"シミュレーション実行中のエラー: {e}")
         return {'error': f'Error during simulation: {str(e)}'}

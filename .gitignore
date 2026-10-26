@@ -1,7 +1,3 @@
-# User Requested Exclusions
-minamino-main/
-minamino-main
-
 # Python
 __pycache__/
 *.py[cod]
@@ -70,6 +66,4 @@ ehthumbs.db
 Thumbs.db
 
 # other
-temp.txt
-icthesis_template.tex
 prompt_memo.txt

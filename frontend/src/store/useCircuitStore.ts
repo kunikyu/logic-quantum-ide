@@ -172,7 +172,35 @@ interface CircuitState {
   setMode:           (mode: AppMode) => void;
 }
 
-const API_BASE = 'http://localhost:8000';
+export const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:8000';
+
+const extractInitialStates = (simulationResults: SimulationResult | null): Record<string, number> => {
+  const initialStates: Record<string, number> = {};
+  if (simulationResults?.timingData) {
+    for (const [nid, vals] of Object.entries(simulationResults.timingData)) {
+      if (vals.length > 0) initialStates[nid] = vals[vals.length - 1];
+    }
+  }
+  return initialStates;
+};
+
+const postSimulationRequest = async (body: Record<string, unknown>): Promise<SimulationResult | null> => {
+  try {
+    const res = await fetch(`${API_BASE}/api/simulate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      console.error('[Quantum IDE] シミュレーション API エラー:', res.status);
+      return null;
+    }
+    return await res.json();
+  } catch (err) {
+    console.warn('[Quantum IDE] バックエンドへの接続に失敗:', err);
+    return null;
+  }
+};
 
 const QUANTUM_GATE_TYPES = new Set(['H', 'X', 'Y', 'Z', 'S', 'T', 'CTRL', 'Measure']);
 
@@ -401,30 +429,15 @@ const useCircuitStore = create<CircuitState>((set, get) => ({
     const { nodes, edges, simulationResults, customModules } = get();
     if (nodes.length === 0) return;
 
-    // 現在の最新状態（記憶のアンカー）を抽出
-    const initialStates: Record<string, number> = {};
-    if (simulationResults?.timingData) {
-      for (const [nid, vals] of Object.entries(simulationResults.timingData)) {
-        if (vals.length > 0) initialStates[nid] = vals[vals.length - 1];
-      }
-    }
+    const initialStates = extractInitialStates(simulationResults);
 
     set({ isSimulating: true });
     try {
-      const res = await fetch(`${API_BASE}/api/simulate`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nodes, edges, steps, initialStates, customModules }),
-      });
-      if (!res.ok) {
-        console.error('[Quantum IDE] シミュレーション API エラー:', res.status);
-        return;
+      const result = await postSimulationRequest({ nodes, edges, steps, initialStates, customModules });
+      if (result) {
+        set({ simulationResults: result });
+        console.info('[Quantum IDE] シミュレーション完了:', result);
       }
-      const result: SimulationResult = await res.json();
-      set({ simulationResults: result });
-      console.info('[Quantum IDE] シミュレーション完了:', result);
-    } catch (err) {
-      console.warn('[Quantum IDE] バックエンドへの接続に失敗:', err);
     } finally {
       set({ isSimulating: false });
       get().fetchLogicExpressions();
@@ -621,28 +634,17 @@ const useCircuitStore = create<CircuitState>((set, get) => ({
     const { nodes, edges, clockStep, simulationResults, customModules } = get();
     if (nodes.length === 0) return;
 
-    const initialStates: Record<string, number> = {};
-    if (simulationResults?.timingData) {
-      for (const [nid, vals] of Object.entries(simulationResults.timingData)) {
-        if (vals.length > 0) initialStates[nid] = vals[vals.length - 1];
-      }
-    }
+    const initialStates = extractInitialStates(simulationResults);
+    const result = await postSimulationRequest({ nodes, edges, steps: 1, startStep: clockStep, initialStates, customModules });
+    if (!result) return;
 
-    try {
-      const res = await fetch(`${API_BASE}/api/simulate`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nodes, edges, steps: 1, startStep: clockStep, initialStates, customModules }),
-      });
-      if (!res.ok) return;
-      const result: SimulationResult = await res.json();
-      set({
-        simulationResults: {
-          edgeStates:   { ...result.edgeStates },
-          quantumState: { ...result.quantumState },
-          timingData:   simulationResults?.timingData ?? {},
-        },
-      });
-    } catch { /* サイレントフェイル */ }
+    set({
+      simulationResults: {
+        edgeStates:   { ...result.edgeStates },
+        quantumState: { ...result.quantumState },
+        timingData:   simulationResults?.timingData ?? {},
+      },
+    });
   },
 
   // --- イベント駆動の自動伝播 (Auto-Propagation) ---
@@ -650,27 +652,15 @@ const useCircuitStore = create<CircuitState>((set, get) => ({
     const { nodes, edges, clockStep, simulationResults, customModules } = get();
     if (nodes.length === 0) return;
 
-    const initialStates: Record<string, number> = {};
-    if (simulationResults?.timingData) {
-      for (const [nid, vals] of Object.entries(simulationResults.timingData)) {
-        if (vals.length > 0) initialStates[nid] = vals[vals.length - 1];
-      }
-    }
-
+    const initialStates = extractInitialStates(simulationResults);
     try {
-      const res = await fetch(`${API_BASE}/api/simulate`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        // 自動伝播として30ステップ高速計算
-        body: JSON.stringify({ nodes, edges, steps: 30, startStep: clockStep, initialStates, customModules }),
-      });
-      if (!res.ok) return;
-      const result: SimulationResult = await res.json();
-      
+      const result = await postSimulationRequest({ nodes, edges, steps: 30, startStep: clockStep, initialStates, customModules });
+      if (!result) return;
+
       set((state) => {
         const existing = state.simulationResults?.timingData ?? {};
         const merged: Record<string, number[]> = {};
         for (const [nid, vals] of Object.entries(result.timingData)) {
-          // タイミングチャートを汚さないため、最終到達状態の1ステップ分だけを記録
           merged[nid] = [...(existing[nid] ?? []), vals[vals.length - 1]];
         }
         return {
@@ -682,8 +672,7 @@ const useCircuitStore = create<CircuitState>((set, get) => ({
           },
         };
       });
-    } catch { /* サイレントフェイル */ }
-    finally {
+    } finally {
       get().fetchLogicExpressions();
     }
   },
@@ -693,21 +682,12 @@ const useCircuitStore = create<CircuitState>((set, get) => ({
     const { nodes, edges, clockStep, simulationResults, customModules } = get();
     if (nodes.length === 0) return;
 
-    const initialStates: Record<string, number> = {};
-    if (simulationResults?.timingData) {
-      for (const [nid, vals] of Object.entries(simulationResults.timingData)) {
-        if (vals.length > 0) initialStates[nid] = vals[vals.length - 1];
-      }
-    }
-
+    const initialStates = extractInitialStates(simulationResults);
     set({ isSimulating: true });
     try {
-      const res = await fetch(`${API_BASE}/api/simulate`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nodes, edges, steps: 1, startStep: clockStep, initialStates, customModules }),
-      });
-      if (!res.ok) return;
-      const result: SimulationResult = await res.json();
+      const result = await postSimulationRequest({ nodes, edges, steps: 1, startStep: clockStep, initialStates, customModules });
+      if (!result) return;
+
       set((state) => {
         const existing = state.simulationResults?.timingData ?? {};
         const merged: Record<string, number[]> = {};
@@ -723,8 +703,6 @@ const useCircuitStore = create<CircuitState>((set, get) => ({
           },
         };
       });
-    } catch (err) {
-      console.warn('[Quantum IDE] ステップ実行エラー:', err);
     } finally {
       set({ isSimulating: false });
       get().fetchLogicExpressions();

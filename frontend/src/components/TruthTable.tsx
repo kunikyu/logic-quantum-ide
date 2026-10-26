@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Table2, Loader2, AlertCircle } from 'lucide-react';
 import useCircuitStore from '../store/useCircuitStore';
 
-const API = 'http://localhost:8000';
+import { API_BASE } from '../api/client';
 
 interface TruthTableData {
   inputLabels:  string[];
@@ -29,7 +29,7 @@ const TruthTable: React.FC = () => {
     if (!canAnalyze) return;
     setLoading(true); setFetchErr(null);
     try {
-      const res = await fetch(`${API}/api/truthtable`, {
+      const res = await fetch(`${API_BASE}/api/truthtable`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nodes, edges, customModules }),

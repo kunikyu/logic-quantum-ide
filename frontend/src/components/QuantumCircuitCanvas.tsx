@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import useCircuitStore, { type QuantumGate } from '../store/useCircuitStore';
+import useCircuitStore from '../store/useCircuitStore';
 import { QUANTUM_GATES } from './GatePalette';
+import { useQuantumShortcuts } from '../hooks/useQuantumShortcuts';
 
 const QuantumCircuitCanvas: React.FC = () => {
   const { 
     quantumGrid, quantumNumQubits, quantumNumSlots, 
     setQuantumGrid, setQuantumNumQubits,
     setConnectionNotice,
-    pushQuantumHistory, undoQuantum, redoQuantum,
+    pushQuantumHistory,
     quantumHoveredStep, quantumSelectedStep,
     setQuantumHoveredStep, setQuantumSelectedStep
   } = useCircuitStore();
@@ -15,139 +16,16 @@ const QuantumCircuitCanvas: React.FC = () => {
   const [dragOverCell, setDragOverCell] = useState<{ q: number; s: number } | null>(null);
   const [draggingGate, setDraggingGate] = useState<{ q: number; s: number } | null>(null);
   const [selectedCells, setSelectedCells] = useState<{ q: number; s: number }[]>([]);
-  const [quantumClipboard, setQuantumClipboard] = useState<{qOffset: number; sOffset: number; gate: QuantumGate}[]>([]);
+  useQuantumShortcuts({
+    selectedCells,
+    setSelectedCells,
+  });
 
   const [scale, setScale] = useState(1);
   const [pan, setPan] = useState({ x: 50, y: 50 });
   const [isPanning, setIsPanning] = useState(false);
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
   const canvasRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger if user is typing in an input field
-      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
-
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedCells.length > 0) {
-          pushQuantumHistory();
-          const newGrid = [...quantumGrid.map(row => [...row])];
-          selectedCells.forEach(cell => {
-            newGrid[cell.q][cell.s] = null;
-          });
-          setQuantumGrid(newGrid);
-          setSelectedCells([]);
-        }
-      } else if (e.ctrlKey || e.metaKey) {
-        switch (e.key.toLowerCase()) {
-          case 'a':
-            e.preventDefault();
-            const allSelected: {q: number, s: number}[] = [];
-            for (let q = 0; q < quantumGrid.length; q++) {
-              for (let s = 0; s < quantumNumSlots; s++) {
-                if (quantumGrid[q][s]) {
-                  allSelected.push({ q, s });
-                }
-              }
-            }
-            setSelectedCells(allSelected);
-            break;
-          case 'c':
-            if (selectedCells.length > 0) {
-              const expanded = [...selectedCells];
-              const minQ = Math.min(...expanded.map(c => c.q));
-              const minS = Math.min(...expanded.map(c => c.s));
-              const items: {qOffset: number, sOffset: number, gate: QuantumGate}[] = [];
-              expanded.forEach(c => {
-                const gate = quantumGrid[c.q][c.s];
-                if (gate) {
-                  items.push({ qOffset: c.q - minQ, sOffset: c.s - minS, gate });
-                }
-              });
-              setQuantumClipboard(items);
-            }
-            break;
-          case 'v':
-            if (quantumClipboard.length > 0) {
-              let targetQ = selectedCells.length > 0 ? selectedCells[0].q : undefined;
-              let targetS = selectedCells.length > 0 ? selectedCells[0].s : undefined;
-
-              let foundPos = false;
-              if (targetQ !== undefined && targetS !== undefined) {
-                 for (let s = targetS; s < quantumNumSlots; s++) {
-                    let canFit = true;
-                    for (const item of quantumClipboard) {
-                       const pasteQ = targetQ + item.qOffset;
-                       const pasteS = s + item.sOffset;
-                       if (pasteQ < 0 || pasteQ >= quantumGrid.length || pasteS < 0 || pasteS >= quantumNumSlots || quantumGrid[pasteQ][pasteS]) {
-                          canFit = false; break;
-                       }
-                    }
-                    if (canFit) {
-                       targetS = s; foundPos = true; break;
-                    }
-                 }
-              } else {
-                 outer: for (let s = 0; s < quantumNumSlots; s++) {
-                    for (let q = 0; q < quantumGrid.length; q++) {
-                       let canFit = true;
-                       for (const item of quantumClipboard) {
-                          const pasteQ = q + item.qOffset;
-                          const pasteS = s + item.sOffset;
-                          if (pasteQ < 0 || pasteQ >= quantumGrid.length || pasteS < 0 || pasteS >= quantumNumSlots || quantumGrid[pasteQ][pasteS]) {
-                             canFit = false; break;
-                          }
-                       }
-                       if (canFit) {
-                          targetQ = q; targetS = s; foundPos = true; break outer;
-                       }
-                    }
-                 }
-              }
-
-              if (foundPos && targetQ !== undefined && targetS !== undefined) {
-                 pushQuantumHistory();
-                 const newGrid = [...quantumGrid.map(row => [...row])];
-                 const pairIdMap = new Map<number, number>();
-                 const newSelected: {q: number, s: number}[] = [];
-                 
-                 quantumClipboard.forEach(item => {
-                    const pasteQ = targetQ! + item.qOffset;
-                    const pasteS = targetS! + item.sOffset;
-                    let newGate = { ...item.gate, id: Date.now() + Math.random() };
-                    
-                    if (newGate.pairId) {
-                       if (!pairIdMap.has(newGate.pairId)) {
-                          pairIdMap.set(newGate.pairId, Date.now() + Math.random());
-                       }
-                       newGate.pairId = pairIdMap.get(newGate.pairId);
-                    }
-                    newGrid[pasteQ][pasteS] = newGate;
-                    newSelected.push({ q: pasteQ, s: pasteS });
-                 });
-                 
-                 setQuantumGrid(newGrid);
-                 setSelectedCells(newSelected);
-              }
-            }
-            break;
-          case 'z':
-            e.preventDefault();
-            if (e.shiftKey) redoQuantum(); else undoQuantum();
-            setSelectedCells([]);
-            break;
-          case 'y':
-            e.preventDefault();
-            redoQuantum();
-            setSelectedCells([]);
-            break;
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [quantumGrid, selectedCells, quantumClipboard, pushQuantumHistory, undoQuantum, redoQuantum, setQuantumGrid, quantumNumSlots]);
 
   useEffect(() => {
     const el = canvasRef.current;
