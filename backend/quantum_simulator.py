@@ -248,7 +248,8 @@ def run_simulation(circuit_definition: list, shots: int = 1024, num_qubits: int 
             'circuit_diagram': img_str,
             'bloch_vectors': final_bloch_vectors,
             'measured_qubits': measured_qubits,
-            'calc_steps': calc_steps
+            'calc_steps': calc_steps,
+            'latex': history
         }
 
     except Exception as e:
