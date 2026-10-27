@@ -96,10 +96,11 @@ const stepDirac = (step: any): string => step.dirac || diracFromNumeric(step.sta
 const QuantumResultsPanel: React.FC = () => {
   const { 
     quantumSimulationResult,
-    quantumHoveredStep,
+    quantumGrid,
     quantumSelectedStep,
-    setQuantumHoveredStep,
-    setQuantumSelectedStep
+    setQuantumSelectedStep,
+    setQuantumSelectedCells,
+    quantumSelectedCells
   } = useCircuitStore();
   const [activeTab, setActiveTab] = useState<Tab>('process');
   const [sortMode, setSortMode] = useState<SortMode>('basis');
@@ -135,6 +136,43 @@ const QuantumResultsPanel: React.FC = () => {
 
   const handleNext = () => {
     if (currentIndex < latex.length - 1 ) setCurrentIndex(currentIndex + 1);
+  };
+
+  // 計算過程のステップに対応する回路セルを求める
+  const getStepCells = (step: any): { q: number; s: number }[] => {
+    if (!step || step.slot < 0) return [];
+
+    const qubitIndices: number[] = Array.isArray(step.qubits) ? step.qubits : [];
+    const targetQubits = qubitIndices.length > 0
+      ? qubitIndices
+      : quantumGrid.map((_, q) => q).filter(q => quantumGrid[q]?.[step.slot]);
+
+    return targetQubits
+      .filter(q => quantumGrid[q]?.[step.slot])
+      .map(q => ({ q, s: step.slot }));
+  };
+
+  // 計算過程のステップをクリックしたら、対応する回路セルを通常の選択（青枠）にする
+  const handleStepClick = (step: any) => {
+    if (!step || step.slot < 0) return;
+
+    const cells = getStepCells(step);
+    const isAlreadySelected = cells.length > 0 &&
+      cells.length === quantumSelectedCells.length &&
+      cells.every(cell => quantumSelectedCells.some(sel => sel.q === cell.q && sel.s === cell.s));
+
+    if (isAlreadySelected) {
+      setQuantumSelectedStep(null);
+      setQuantumSelectedCells([]);
+      return;
+    }
+
+    setQuantumSelectedCells(cells);
+    setQuantumSelectedStep({
+      qubits: Array.isArray(step.qubits) ? step.qubits : [],
+      slot: step.slot,
+      source: 'panel',
+    });
   };
 
   const filteredStatevector = useMemo(() => {
@@ -245,7 +283,10 @@ const QuantumResultsPanel: React.FC = () => {
     <div 
       ref={panelRef}
       style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: 'var(--color-bg-base)', borderLeft: '1px solid var(--color-border)' }}
-      onClick={() => setQuantumSelectedStep(null)}
+      onClick={() => {
+        setQuantumSelectedStep(null);
+        setQuantumSelectedCells([]);
+      }}
     >
       {/* タブヘッダー */}
       <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--color-border)', padding: '0 10px' }}>
@@ -321,12 +362,10 @@ const QuantumResultsPanel: React.FC = () => {
                     
                     const prev_qubits_state = idx > 0 ? calc_steps[idx - 1].qubits_state : null;
 
-                    const isHovered = quantumHoveredStep?.slot === step.slot && 
-                      (!quantumHoveredStep?.qubits?.length || !step.qubits || quantumHoveredStep?.qubits?.some((q: number) => step.qubits?.includes(q)));
                     const isSelected = quantumSelectedStep?.slot === step.slot && 
                       (!quantumSelectedStep?.qubits?.length || !step.qubits || quantumSelectedStep?.qubits?.some((q: number) => step.qubits?.includes(q)));
-                    const bgColor = isSelected ? 'rgba(168,85,247,0.15)' : isHovered ? 'rgba(168,85,247,0.05)' : 'var(--color-bg-panel)';
-                    const borderColor = isSelected ? 'var(--color-accent-purple)' : isHovered ? 'rgba(168,85,247,0.5)' : 'var(--color-border)';
+                    const bgColor = isSelected ? 'rgba(168,85,247,0.15)' : 'var(--color-bg-panel)';
+                    const borderColor = isSelected ? 'var(--color-accent-purple)' : 'var(--color-border)';
 
                     return (
                       <div 
@@ -339,18 +378,9 @@ const QuantumResultsPanel: React.FC = () => {
                           cursor: step.slot >= 0 ? 'pointer' : 'default',
                           transition: 'all 0.2s'
                         }}
-                        onMouseEnter={() => {
-                          if (step.slot >= 0) setQuantumHoveredStep({ qubits: step.qubits || [], slot: step.slot, source: 'panel' });
-                        }}
-                        onMouseLeave={() => {
-                          setQuantumHoveredStep(null);
-                        }}
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (step.slot >= 0) {
-                             if (isSelected) setQuantumSelectedStep(null);
-                             else setQuantumSelectedStep({ qubits: step.qubits || [], slot: step.slot, source: 'panel' });
-                          }
+                          handleStepClick(step);
                         }}
                       >
                         <div style={{ fontWeight: 600, fontSize: '12px', color: 'var(--color-text-primary)', marginBottom: '4px' }}>

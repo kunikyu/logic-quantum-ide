@@ -119,10 +119,11 @@ interface CircuitState {
   undoQuantum: () => void;
   redoQuantum: () => void;
 
-  quantumHoveredStep: { qubits: number[], slot: number, source?: 'panel' | 'canvas' } | null;
   quantumSelectedStep: { qubits: number[], slot: number, source?: 'panel' | 'canvas' } | null;
-  setQuantumHoveredStep: (step: { qubits: number[], slot: number, source?: 'panel' | 'canvas' } | null) => void;
   setQuantumSelectedStep: (step: { qubits: number[], slot: number, source?: 'panel' | 'canvas' } | null) => void;
+
+  quantumSelectedCells: { q: number; s: number }[];
+  setQuantumSelectedCells: (cells: { q: number; s: number }[]) => void;
 
   onNodesChange:  (changes: NodeChange[]) => void;
   onEdgesChange:  (changes: EdgeChange[]) => void;
@@ -246,11 +247,11 @@ const useCircuitStore = create<CircuitState>((set, get) => ({
 
   quantumPast:       [],
   quantumFuture:     [],
-  quantumHoveredStep: null,
   quantumSelectedStep: null,
+  quantumSelectedCells: [],
 
-  setQuantumHoveredStep: (step) => set({ quantumHoveredStep: step }),
   setQuantumSelectedStep: (step) => set({ quantumSelectedStep: step }),
+  setQuantumSelectedCells: (cells) => set({ quantumSelectedCells: cells }),
 
   pushQuantumHistory: () => {
     set((state) => {

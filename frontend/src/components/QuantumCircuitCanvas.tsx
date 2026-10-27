@@ -9,13 +9,13 @@ const QuantumCircuitCanvas: React.FC = () => {
     setQuantumGrid, setQuantumNumQubits,
     setConnectionNotice,
     pushQuantumHistory,
-    quantumHoveredStep, quantumSelectedStep,
-    setQuantumHoveredStep, setQuantumSelectedStep
+    setQuantumSelectedStep,
+    quantumSelectedCells: selectedCells,
+    setQuantumSelectedCells: setSelectedCells,
   } = useCircuitStore();
 
   const [dragOverCell, setDragOverCell] = useState<{ q: number; s: number } | null>(null);
   const [draggingGate, setDraggingGate] = useState<{ q: number; s: number } | null>(null);
-  const [selectedCells, setSelectedCells] = useState<{ q: number; s: number }[]>([]);
   useQuantumShortcuts({
     selectedCells,
     setSelectedCells,
@@ -315,7 +315,7 @@ const QuantumCircuitCanvas: React.FC = () => {
     };
     window.addEventListener('mousedown', handleGlobalClick);
     return () => window.removeEventListener('mousedown', handleGlobalClick);
-  }, []);
+  }, [setSelectedCells]);
 
   return (
     <div 
@@ -415,24 +415,17 @@ const QuantumCircuitCanvas: React.FC = () => {
                 const hoverBgColor = gateMeta ? gateMeta.bgColor.replace(/0\.\d+\)/, '0.25)') : 'rgba(168,85,247,0.25)';
                 const isSelected = selectedCells.some(c => c.q === qIndex && c.s === sIndex);
                 
-                const isProcessHovered = quantumHoveredStep?.source === 'panel' && quantumHoveredStep?.slot === sIndex && quantumHoveredStep?.qubits.includes(qIndex);
-                const isProcessSelected = quantumSelectedStep?.slot === sIndex && quantumSelectedStep?.qubits.includes(qIndex);
-                
-                const cellBorderColor = isSelected ? '#3b82f6' : isProcessSelected ? '#a855f7' : isProcessHovered ? 'rgba(168,85,247,0.6)' : (dragOverCell?.q === qIndex && dragOverCell?.s === sIndex ? '#a855f7' : 'transparent');
-                const cellBorderStyle = (isSelected || isProcessSelected || isProcessHovered) ? 'solid' : 'dashed';
+                const cellBorderColor = isSelected ? '#3b82f6' : (dragOverCell?.q === qIndex && dragOverCell?.s === sIndex ? '#a855f7' : 'transparent');
+                const cellBorderStyle = isSelected ? 'solid' : 'dashed';
                 const cellBorderWidth = '2px';
                 
                 const cellBoxShadow = dragOverCell?.q === qIndex && dragOverCell?.s === sIndex
                   ? 'inset 0 0 12px rgba(168,85,247,0.5)' 
                   : isSelected ? '0 0 12px rgba(59,130,246,0.5)'
-                  : isProcessSelected ? '0 0 12px rgba(168,85,247,0.5)'
-                  : isProcessHovered ? '0 0 12px rgba(168,85,247,0.4)'
                   : 'none';
                   
                 const cellBgColor = dragOverCell?.q === qIndex && dragOverCell?.s === sIndex
                   ? 'rgba(168,85,247,0.2)' 
-                  : isProcessSelected ? 'rgba(168,85,247,0.15)'
-                  : isProcessHovered ? 'rgba(168,85,247,0.2)'
                   : 'transparent';
 
                 return (
@@ -458,14 +451,6 @@ const QuantumCircuitCanvas: React.FC = () => {
                           setQuantumSelectedStep({ qubits: [qIndex], slot: sIndex, source: 'canvas' });
                         }
                       }
-                    }}
-                    onMouseEnter={() => {
-                       if (quantumGrid[qIndex][sIndex]) {
-                          setQuantumHoveredStep({ qubits: [qIndex], slot: sIndex, source: 'canvas' });
-                       }
-                    }}
-                    onMouseLeave={() => {
-                       setQuantumHoveredStep(null);
                     }}
                     onDragOver={(e) => handleDragOver(e, qIndex, sIndex)}
                     onDragLeave={handleDragLeave}

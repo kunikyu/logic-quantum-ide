@@ -4,7 +4,7 @@ import useCircuitStore, { type QuantumGate } from '../store/useCircuitStore';
 
 interface UseQuantumShortcutsProps {
   selectedCells: { q: number; s: number }[];
-  setSelectedCells: React.Dispatch<React.SetStateAction<{ q: number; s: number }[]>>;
+  setSelectedCells: (cells: { q: number; s: number }[]) => void;
 }
 
 export function useQuantumShortcuts({
@@ -135,7 +135,7 @@ export function useQuantumShortcuts({
                 quantumClipboard.forEach((item) => {
                   const pasteQ = targetQ! + item.qOffset;
                   const pasteS = targetS! + item.sOffset;
-                  let newGate = { ...item.gate, id: Date.now() + Math.random() };
+                  const newGate = { ...item.gate, id: Date.now() + Math.random() };
 
                   if (newGate.pairId) {
                     if (!pairIdMap.has(newGate.pairId)) {
