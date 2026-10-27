@@ -72,6 +72,26 @@ const formatComplexRoot = (real: number, imag: number): string => {
   return `${r} - ${iStr.startsWith('-') ? iStr.substring(1) : iStr}`;
 };
 
+const diracFromNumeric = (svRaw: any[]): string => {
+  const sv = parseStatevector(svRaw);
+  return sv.map(s => {
+    const coeff = formatComplexRoot(s.real, s.imag);
+    if (coeff === '1') return `|${s.basisStr}⟩`;
+    if (coeff === '-1') return `- |${s.basisStr}⟩`;
+    if (coeff === 'i') return `i|${s.basisStr}⟩`;
+    if (coeff === '-i') return `-i|${s.basisStr}⟩`;
+    return `(${coeff})|${s.basisStr}⟩`;
+  }).join(' + ') || '0';
+};
+
+const formatQubitState = (qs: any): string => {
+  if (typeof qs === 'string') return qs === 'ENTANGLED' ? 'もつれ状態 (Entangled)' : qs;
+  if (Array.isArray(qs)) return diracFromNumeric(qs);
+  return 'Unknown';
+};
+
+const stepDirac = (step: any): string => step.dirac || diracFromNumeric(step.statevector || []);
+
 // --- Components ---
 const QuantumResultsPanel: React.FC = () => {
   const { 
@@ -190,35 +210,12 @@ const QuantumResultsPanel: React.FC = () => {
     textStr += "■ 計算過程\n";
     calc_steps.forEach((step: any, idx: number) => {
       textStr += `${idx + 1}. ${step.label}\n`;
-      const sv = parseStatevector(step.statevector);
-      const diracStr = sv.map(s => {
-        const coeff = formatComplexRoot(s.real, s.imag);
-        if (coeff === '1') return `|${s.basisStr}⟩`;
-        if (coeff === '-1') return `- |${s.basisStr}⟩`;
-        if (coeff === 'i') return `i|${s.basisStr}⟩`;
-        if (coeff === '-i') return `-i|${s.basisStr}⟩`;
-        return `(${coeff})|${s.basisStr}⟩`;
-      }).join(' + ');
-
       if (step.qubits_state) {
         step.qubits_state.forEach((qs: any, qidx: number) => {
-          let fQs = typeof qs === 'string' ? qs : '';
-          if (Array.isArray(qs)) {
-            const parsed = parseStatevector(qs);
-            fQs = parsed.map(s => {
-              const coeff = formatComplexRoot(s.real, s.imag);
-              if (coeff === '1') return `|${s.basisStr}⟩`;
-              if (coeff === '-1') return `- |${s.basisStr}⟩`;
-              if (coeff === 'i') return `i|${s.basisStr}⟩`;
-              if (coeff === '-i') return `-i|${s.basisStr}⟩`;
-              return `(${coeff})|${s.basisStr}⟩`;
-            }).join(' + ');
-          }
-          if (fQs === 'ENTANGLED') fQs = 'もつれ状態 (Entangled)';
-          textStr += `  q${qidx}: ${fQs}\n`;
+          textStr += `  q${qidx}: ${formatQubitState(qs)}\n`;
         });
       }
-      textStr += `  全体: ${diracStr || '0'}\n\n`;
+      textStr += `  全体: ${stepDirac(step)}\n\n`;
     });
 
     // 2. 状態ベクトル (最終)
@@ -299,15 +296,7 @@ const QuantumResultsPanel: React.FC = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <h3 style={{ margin: 0, fontSize: '14px', color: 'var(--color-text-primary)' }}>回路の計算過程</h3>
                   {calc_steps.map((step: any, idx: number) => {
-                    const sv = parseStatevector(step.statevector);
-                    const diracStr = sv.map(s => {
-                      const coeff = formatComplexRoot(s.real, s.imag);
-                      if (coeff === '1') return `|${s.basisStr}⟩`;
-                      if (coeff === '-1') return `- |${s.basisStr}⟩`;
-                      if (coeff === 'i') return `i|${s.basisStr}⟩`;
-                      if (coeff === '-i') return `-i|${s.basisStr}⟩`;
-                      return `(${coeff})|${s.basisStr}⟩`;
-                    }).join(' + ');
+                    const diracStr = stepDirac(step);
 
                     const gateDesc = (() => {
                       const isCtrl = step.label.includes('(ctrl)');
@@ -330,22 +319,6 @@ const QuantumResultsPanel: React.FC = () => {
                       return '';
                     })();
                     
-                    const formatQubitState = (qs: any) => {
-                      if (typeof qs === 'string') return qs === 'ENTANGLED' ? 'もつれ状態 (Entangled)' : qs;
-                      if (Array.isArray(qs)) {
-                        const parsed = parseStatevector(qs);
-                        return parsed.map(s => {
-                          const coeff = formatComplexRoot(s.real, s.imag);
-                          if (coeff === '1') return `    |${s.basisStr}⟩`;
-                          if (coeff === '-1') return ` -  |${s.basisStr}⟩`;
-                          if (coeff === 'i') return `  i |${s.basisStr}⟩`;
-                          if (coeff === '-i') return ` -i |${s.basisStr}⟩`;
-                          return `(${coeff})|${s.basisStr}⟩`;
-                        }).join(' + ') || '0';
-                      }
-                      return 'Unknown';
-                    };
-
                     const prev_qubits_state = idx > 0 ? calc_steps[idx - 1].qubits_state : null;
 
                     const isHovered = quantumHoveredStep?.slot === step.slot && 

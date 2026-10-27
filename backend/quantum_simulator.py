@@ -2,7 +2,7 @@
 import io
 import base64
 import logging
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 from equation import SymbolicSimulator
 
 import matplotlib.pyplot as plt
@@ -19,21 +19,11 @@ logger = logging.getLogger(__name__)
 
 
 def _format_complex(value: complex) -> str:
-    """計算過程へ渡す複素数を、精度を落とさず文字列化する。"""
     return f'{value.real:.12f}{value.imag:+.12f}j'
 
 
-def _calc_qubit_states_and_bloch(
-    sv: Statevector, num_qubits: int
-) -> Tuple[List[Any], List[List[float]]]:
-    """
-    Statevectorから各単一量子ビットの局所状態表現およびブロッホ球座標を厳密に計算する。
-    - もつれ状態の場合: "ENTANGLED"
-    - 純粋状態の場合: 密度行列・ブロッホ座標から厳密に再生した [α, β]
-    """
-    qubits_state: List[Any] = []
+def _calc_bloch_vectors(sv: Statevector, num_qubits: int) -> List[List[float]]:
     bloch_vectors: List[List[float]] = []
-
     for i in range(num_qubits):
         try:
             trace_over = [q for q in range(num_qubits) if q != i]
@@ -42,26 +32,10 @@ def _calc_qubit_states_and_bloch(
             y = float(rho_i.expectation_value(Pauli('Y')).real)
             z = float(rho_i.expectation_value(Pauli('Z')).real)
             bloch_vectors.append([x, y, z])
-
-            # ブロッホ球ベクトルのノルムの二乗（純粋度）
-            r2 = x * x + y * y + z * z
-            if r2 < 0.99:
-                qubits_state.append("ENTANGLED")
-            else:
-                # 純粋状態の復元: 基準位相として α を実数にとる
-                if 1.0 + z > 1e-6:
-                    alpha = ((1.0 + z) / 2.0) ** 0.5
-                    beta = complex(x, y) / (2.0 * alpha)
-                else:
-                    alpha = 0.0
-                    beta = complex(1.0, 0.0)
-                qubits_state.append([_format_complex(complex(alpha)), _format_complex(complex(beta))])
         except Exception as exc:
-            logger.warning(f"Qubit {i} の状態計算に失敗: {exc}")
-            qubits_state.append("Unknown")
+            logger.warning(f"Qubit {i} の Bloch 計算に失敗: {exc}")
             bloch_vectors.append([0.0, 0.0, 0.0])
-
-    return qubits_state, bloch_vectors
+    return bloch_vectors
 
 
 def run_simulation(circuit_definition: list, shots: int = 1024, num_qubits: int = 2) -> dict:
@@ -80,16 +54,42 @@ def run_simulation(circuit_definition: list, shots: int = 1024, num_qubits: int 
         logger.info(f"量子回路作成: {safe_num_qubits} qubits")
 
         calc_steps: List[Dict[str, Any]] = []
+        history: List[Dict[str, Any]] = []
+        sym_sim = SymbolicSimulator(safe_num_qubits)
 
-        # 初期ステップの記録
-        initial_qubits_state, _ = _calc_qubit_states_and_bloch(current_sv, safe_num_qubits)
-        calc_steps.append({
-            'label': '初期状態',
-            'statevector': [_format_complex(complex(v)) for v in current_sv.data],
-            'qubits_state': initial_qubits_state,
-            'qubits': [],
-            'slot': -1
-        })
+        def _record_step(label: str, qubits: List[int], slot: int, name: str, qargs: list, op_mat=None, old_state=None):
+            dirac, qstates = sym_sim.display_state()
+            calc_steps.append({
+                'label': label,
+                'dirac': dirac,
+                'qubits_state': qstates,
+                'qubits': qubits,
+                'slot': slot
+            })
+            if op_mat is None or old_state is None:
+                eq = sym_sim.state_latex()
+            else:
+                eq = sym_sim._generate_equation_latex(op_mat, old_state, sym_sim.current_state)
+            history.append({
+                'step': len(history),
+                'name': name,
+                'qargs': qargs,
+                'params': [],
+                'equation_latex': eq,
+            })
+
+        def _sym_matrix(gate_name: str, gate_op: dict):
+            if gate_name in ('h', 'x', 'y', 'z', 's', 't'):
+                return sym_sim._build_global_matrix({'name': gate_name, 'qargs': [gate_op['qubit']], 'params': []})
+            if gate_name in ('cx', 'cz', 'ccx', 'ccz'):
+                return sym_sim._build_global_matrix({'name': gate_name, 'qargs': gate_op['qubits'], 'params': []})
+            if gate_name == 'mcx':
+                return sym_sim._build_global_matrix({'name': 'mcx', 'qargs': list(gate_op['controls']) + [gate_op['target']], 'params': []})
+            if gate_name == 'mcz':
+                return sym_sim._build_global_matrix({'name': 'mcz', 'qargs': list(gate_op['controls']) + [gate_op['target']], 'params': []})
+            return None
+
+        _record_step('初期状態', [], -1, 'initial', [])
 
         for op in circuit_definition:
             gate = op.get('gate')
@@ -186,19 +186,11 @@ def run_simulation(circuit_definition: list, shots: int = 1024, num_qubits: int 
             else:
                 continue
 
-            # ステップ結果を記録
-            step_qubits_state, _ = _calc_qubit_states_and_bloch(current_sv, safe_num_qubits)
-            calc_steps.append({
-                'label': label,
-                'statevector': [_format_complex(complex(v)) for v in current_sv.data],
-                'qubits_state': step_qubits_state,
-                'qubits': all_op_qubits,
-                'slot': slot - 1
-            })
-
-        # SymbolicSimulatorによるLaTeX数式履歴の生成
-        sym_sim = SymbolicSimulator(safe_num_qubits)
-        history = sym_sim.apply_qiskit_circuit(qc)
+            op_mat = _sym_matrix(gate, op)
+            old_state = None
+            if op_mat is not None:
+                old_state, _ = sym_sim.apply_matrix(op_mat)
+            _record_step(label, all_op_qubits, slot - 1, gate, all_op_qubits, op_mat, old_state)
 
         # 回路図（Matplotlib）の描画
         fig = None
@@ -245,7 +237,7 @@ def run_simulation(circuit_definition: list, shots: int = 1024, num_qubits: int 
 
         # 最終状態ベクトルおよびブロッホ球ベクトルの取得（二重計算を排除）
         final_statevector_list = [_format_complex(complex(v)) for v in current_sv.data]
-        _, final_bloch_vectors = _calc_qubit_states_and_bloch(current_sv, safe_num_qubits)
+        final_bloch_vectors = _calc_bloch_vectors(current_sv, safe_num_qubits)
 
         return {
             'counts': counts,

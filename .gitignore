@@ -67,3 +67,6 @@ Thumbs.db
 
 # other
 prompt_memo.txt
+
+.cursorignore
+.cursorrules

@@ -1,3 +1,4 @@
+import re
 import sympy as sp
 from sympy.physics.quantum import TensorProduct
 
@@ -6,24 +7,24 @@ I_mat = sp.Matrix([[1, 0], [0, 1]])
 X_mat = sp.Matrix([[0, 1], [1, 0]])
 Y_mat = sp.Matrix([[0, -sp.I], [sp.I, 0]])
 Z_mat = sp.Matrix([[1, 0], [0, -1]])
-H_mat = (1 / sp.sqrt(2)) * sp.Matrix([[1, 1], [1, -1]])
+_INV_SQRT2 = sp.sqrt(2) / 2
+H_mat = _INV_SQRT2 * sp.Matrix([[1, 1], [1, -1]])
 
-# 位相ゲート
 S_mat = sp.Matrix([[1, 0], [0, sp.I]])
 Sdg_mat = sp.Matrix([[1, 0], [0, -sp.I]])
-T_mat = sp.Matrix([[1, 0], [0, sp.exp(sp.I * sp.pi / 4)]])
-Tdg_mat = sp.Matrix([[1, 0], [0, sp.exp(-sp.I * sp.pi / 4)]])
+T_mat = sp.Matrix([[1, 0], [0, _INV_SQRT2 * (1 + sp.I)]])
+Tdg_mat = sp.Matrix([[1, 0], [0, _INV_SQRT2 * (1 - sp.I)]])
 
-# プロジェクター（制御ゲート構築用）
-P0 = sp.Matrix([[1, 0], [0, 0]])  # |0><0|
-P1 = sp.Matrix([[0, 0], [0, 1]])  # |1><1|
+P0 = sp.Matrix([[1, 0], [0, 0]])
+P1 = sp.Matrix([[0, 0], [0, 1]])
 
-# パラメータ付きゲート
+
 def Rx_mat(theta):
     return sp.Matrix([
         [sp.cos(theta / 2), -sp.I * sp.sin(theta / 2)],
         [-sp.I * sp.sin(theta / 2), sp.cos(theta / 2)]
     ])
+
 
 def Ry_mat(theta):
     return sp.Matrix([
@@ -31,27 +32,145 @@ def Ry_mat(theta):
         [sp.sin(theta / 2), sp.cos(theta / 2)]
     ])
 
+
 def Rz_mat(theta):
     return sp.Matrix([
         [sp.exp(-sp.I * theta / 2), 0],
         [0, sp.exp(sp.I * theta / 2)]
     ])
 
-# 1量子ビットゲートの辞書
+
 SINGLE_QUBIT_GATES = {
     'id': I_mat, 'x': X_mat, 'y': Y_mat, 'z': Z_mat, 'h': H_mat,
     's': S_mat, 'sdg': Sdg_mat, 't': T_mat, 'tdg': Tdg_mat
 }
 
-# --- ヘルパー関数 ---
-def tensor_product_big_endian(matrices: list) -> sp.Matrix:
-    """リスト内の行列をビッグエンディアン順（インデックス0から）でテンソル積展開する"""
-    op = matrices[0]
-    for i in range(1, len(matrices)):
+
+def tensor_product_qiskit(matrices: list) -> sp.Matrix:
+    """matrices[i] は量子ビット i。Qiskit と同じく q_{n-1} ⊗ … ⊗ q_0（右端が q0）。"""
+    op = matrices[-1]
+    for i in range(len(matrices) - 2, -1, -1):
         op = TensorProduct(op, matrices[i])
     return op
 
-# --- シミュレータ本体 ---
+
+def _simp(expr: sp.Expr) -> sp.Expr:
+    return sp.simplify(sp.expand_complex(expr))
+
+
+def _pretty_real(expr: sp.Expr) -> str:
+    expr = _simp(expr)
+    if expr == 0:
+        return '0'
+    sign = ''
+    if expr.is_negative:
+        sign = '-'
+        expr = _simp(-expr)
+    s = sp.sstr(expr)
+    s = re.sub(r'sqrt\((\d+)\)', r'√\1', s)
+    s = re.sub(r'sqrt\(([^)]+)\)', r'√(\1)', s)
+    s = s.replace('**', '^').replace('*', '')
+    return sign + s
+
+
+def _times_i(i_pos: str) -> str:
+    if i_pos == '1':
+        return 'i'
+    if i_pos.isdigit():
+        return f'{i_pos}i'
+    return f'({i_pos})i'
+
+
+def pretty_complex(expr: sp.Expr) -> str:
+    expr = _simp(expr)
+    if expr == 0:
+        return '0'
+    re_p, im_p = expr.as_real_imag()
+    r, i = _pretty_real(re_p), _pretty_real(im_p)
+    if i == '0':
+        return r
+    sign, iabs = ('-', i[1:]) if i.startswith('-') else ('', i)
+    i_term = _times_i(iabs)
+    if r == '0':
+        return f'{sign}{i_term}'
+    if sign:
+        return f'{r} - {i_term}'
+    return f'{r} + {i_term}'
+
+
+def dirac_str(state: sp.Matrix, num_qubits: int) -> str:
+    terms = []
+    dim = 2 ** num_qubits
+    for idx in range(dim):
+        amp = _simp(state[idx, 0])
+        if amp == 0:
+            continue
+        coeff = pretty_complex(amp)
+        ket = f'|{idx:0{num_qubits}b}⟩'
+        if coeff == '1':
+            terms.append(ket)
+        elif coeff == '-1':
+            terms.append(f'- {ket}')
+        elif coeff in ('i', '-i'):
+            terms.append(f'{coeff}{ket}')
+        elif coeff.startswith('-'):
+            terms.append(f"- ({coeff[1:]}){ket}")
+        elif ' + ' in coeff or ' - ' in coeff:
+            terms.append(f'({coeff}){ket}')
+        else:
+            terms.append(f'{coeff}{ket}')
+    if not terms:
+        return '0'
+    out = terms[0]
+    for t in terms[1:]:
+        out += f' - {t[2:]}' if t.startswith('- ') else f' + {t}'
+    return out
+
+
+def _is_zero(expr: sp.Expr) -> bool:
+    return _simp(expr) == 0
+
+
+def _norm(vec: list) -> sp.Expr:
+    s = sp.Integer(0)
+    for x in vec:
+        s += _simp(x * sp.conjugate(x))
+    return _simp(sp.sqrt(_simp(s)))
+
+
+def _parallel(v0: list, v1: list) -> bool:
+    n = len(v0)
+    for j in range(n):
+        for k in range(j + 1, n):
+            if not _is_zero(v0[j] * v1[k] - v0[k] * v1[j]):
+                return False
+    return True
+
+
+def local_qubit_diracs(state: sp.Matrix, num_qubits: int) -> list:
+    vec = [_simp(state[i, 0]) for i in range(2 ** num_qubits)]
+    result = []
+    for q in range(num_qubits):
+        v0, v1 = [], []
+        for idx, amp in enumerate(vec):
+            (v1 if (idx >> q) & 1 else v0).append(amp)
+        if not _parallel(v0, v1):
+            result.append('ENTANGLED')
+            continue
+        n0, n1 = _norm(v0), _norm(v1)
+        if _is_zero(n0) and _is_zero(n1):
+            result.append('0')
+            continue
+        if _is_zero(n0):
+            alpha, beta = sp.Integer(0), sp.Integer(1)
+        else:
+            j = next(j for j, x in enumerate(v0) if not _is_zero(x))
+            alpha = n0
+            beta = _simp(n0 * v1[j] / v0[j])
+        result.append(dirac_str(sp.Matrix([alpha, beta]), 1))
+    return result
+
+
 class SymbolicSimulator:
     def __init__(self, num_qubits: int):
         self.num_qubits = num_qubits
@@ -59,52 +178,57 @@ class SymbolicSimulator:
         self.history = []
 
     def _get_initial_state(self) -> sp.Matrix:
-        """すべての量子ビットが0の初期状態ベクトル(列ベクトル)を生成する"""
         dim = 2 ** self.num_qubits
         state = sp.zeros(dim, 1)
         state[0, 0] = 1
         return state
 
+    def apply_matrix(self, op: sp.Matrix):
+        old = self.current_state
+        new = (op * old).applyfunc(_simp)
+        self.current_state = new
+        return old, new
+
+    def display_state(self):
+        return (
+            dirac_str(self.current_state, self.num_qubits),
+            local_qubit_diracs(self.current_state, self.num_qubits),
+        )
+
+    def state_latex(self) -> str:
+        return sp.latex(self.current_state.applyfunc(_simp), fold_short_frac=True)
+
     def apply_qiskit_circuit(self, qc) -> list:
-        """Qiskitの回路を受け取り、ステップごとに演算を行って履歴を返す"""
         gate_infos = self._extract_gate_info(qc)
-        print(qc)
-        # Step 0 として初期状態の数式と確率も履歴に保存する
         self.history.append({
             "step": 0,
             "name": "initial",
             "qargs": [],
             "params": [],
-            "equation_latex": sp.latex(self.current_state),
+            "equation_latex": sp.latex(self.current_state, fold_short_frac=True),
             "probabilities": self._calculate_probabilities(self.current_state)
         })
-        
+
         for step, info in enumerate(gate_infos, 1):
             global_op = self._build_global_matrix(info)
-            old_state = self.current_state
-            
-            self.current_state = global_op * old_state
-            equation_latex = self._generate_equation_latex(global_op, old_state, self.current_state)
-            
+            old_state, new_state = self.apply_matrix(global_op)
             self.history.append({
                 "step": step,
                 "name": info["name"],
                 "qargs": info["qargs"],
                 "params": info.get("params", []),
-                "equation_latex": equation_latex,
-                "probabilities": self._calculate_probabilities(self.current_state) # 各ステップの確率を追加
+                "equation_latex": self._generate_equation_latex(global_op, old_state, new_state),
+                "probabilities": self._calculate_probabilities(new_state)
             })
-            
+
         return self.history
 
     def _extract_gate_info(self, qc) -> list:
-        """Qiskit回路からゲート情報を抽出する"""
         gate_infos = []
         for instruction in qc.data:
             op = instruction.operation
-            if op.name == 'save_statevector':
+            if op.name in ('save_statevector', 'measure', 'barrier'):
                 continue
-            # Qiskit 1.0以降の記法（インデックスの取得）
             qargs = [qc.find_bit(q).index for q in instruction.qubits]
             gate_infos.append({
                 'name': op.name,
@@ -114,14 +238,16 @@ class SymbolicSimulator:
         return gate_infos
 
     def _build_global_matrix(self, info: dict) -> sp.Matrix:
-        """ゲート情報から、システム全体のユニタリ行列(ビッグエンディアン)を生成する"""
         name = info['name']
         qargs = info['qargs']
         params = info.get('params', [])
-        
         num = self.num_qubits
 
-        # --- 1量子ビットゲート ---
+        if name in ('mcx', 'ccx') and len(qargs) >= 2:
+            return self._build_n_controlled(num, qargs[:-1], qargs[-1], X_mat)
+        if name in ('mcz', 'ccz') and len(qargs) >= 2:
+            return self._build_n_controlled(num, qargs[:-1], qargs[-1], Z_mat)
+
         if len(qargs) == 1:
             target = qargs[0]
             if name in SINGLE_QUBIT_GATES:
@@ -134,93 +260,62 @@ class SymbolicSimulator:
                 gate_mat = Rz_mat(params[0])
             else:
                 raise NotImplementedError(f"未対応の1量子ビットゲート: {name}")
-                
             matrices = [I_mat] * num
             matrices[target] = gate_mat
-            return tensor_product_big_endian(matrices)
-            
-        # --- 2量子ビットゲート ---
-        elif len(qargs) == 2:
-            ctrl = qargs[0]
-            targ = qargs[1]
-            
+            return tensor_product_qiskit(matrices)
+
+        if len(qargs) == 2:
+            ctrl, targ = qargs[0], qargs[1]
             if name == 'cx':
-                return self._build_controlled_matrix(num, ctrl, targ, X_mat)
-            elif name == 'cz':
-                return self._build_controlled_matrix(num, ctrl, targ, Z_mat)
-            elif name == 'swap':
-                # SWAPゲートは CX(c, t) * CX(t, c) * CX(c, t) として構成する
-                cx1 = self._build_controlled_matrix(num, ctrl, targ, X_mat)
-                cx2 = self._build_controlled_matrix(num, targ, ctrl, X_mat)
+                return self._build_n_controlled(num, [ctrl], targ, X_mat)
+            if name == 'cz':
+                return self._build_n_controlled(num, [ctrl], targ, Z_mat)
+            if name == 'swap':
+                cx1 = self._build_n_controlled(num, [ctrl], targ, X_mat)
+                cx2 = self._build_n_controlled(num, [targ], ctrl, X_mat)
                 return cx1 * cx2 * cx1
-            else:
-                raise NotImplementedError(f"未対応の2量子ビットゲート: {name}")
-                
-        # --- 3量子ビットゲート ---
-        elif len(qargs) == 3:
-            if name == 'ccx':
-                ctrl1, ctrl2, targ = qargs[0], qargs[1], qargs[2]
-                return self._build_ccx_matrix(num, ctrl1, ctrl2, targ)
-            else:
-                raise NotImplementedError(f"未対応の3量子ビットゲート: {name}")
-                
-        else:
-            raise ValueError("サポートされていないビット数のゲートです。")
+            raise NotImplementedError(f"未対応の2量子ビットゲート: {name}")
 
-    def _build_controlled_matrix(self, num_qubits: int, ctrl: int, targ: int, target_gate: sp.Matrix) -> sp.Matrix:
-        """任意の1制御ビット・1標的ビットゲートの全体行列を構築する"""
-        # 制御ビットが0の項
-        mats_0 = [I_mat] * num_qubits
-        mats_0[ctrl] = P0
-        op0 = tensor_product_big_endian(mats_0)
-        
-        # 制御ビットが1の項
-        mats_1 = [I_mat] * num_qubits
-        mats_1[ctrl] = P1
-        mats_1[targ] = target_gate
-        op1 = tensor_product_big_endian(mats_1)
-        
-        return op0 + op1
+        raise ValueError("サポートされていないビット数のゲートです。")
 
-    def _build_ccx_matrix(self, num_qubits: int, ctrl1: int, ctrl2: int, targ: int) -> sp.Matrix:
-        """CCX(トフォリ)ゲートの全体行列を構築する"""
-        ops = []
-        for c1_val in [0, 1]:
-            for c2_val in [0, 1]:
-                mats = [I_mat] * num_qubits
-                mats[ctrl1] = P1 if c1_val == 1 else P0
-                mats[ctrl2] = P1 if c2_val == 1 else P0
-                
-                # 両方の制御ビットが1のときのみ標的にXを作用
-                if c1_val == 1 and c2_val == 1:
-                    mats[targ] = X_mat
-                    
-                ops.append(tensor_product_big_endian(mats))
-                
-        return sum(ops, sp.zeros(2**num_qubits, 2**num_qubits))
+    def _build_n_controlled(self, num_qubits: int, ctrls: list, targ: int, target_gate: sp.Matrix) -> sp.Matrix:
+        nctrl = len(ctrls)
+        acc = sp.zeros(2 ** num_qubits, 2 ** num_qubits)
+        for bits in range(2 ** nctrl):
+            mats = [I_mat] * num_qubits
+            all_one = True
+            for i, c in enumerate(ctrls):
+                bit = (bits >> (nctrl - 1 - i)) & 1
+                mats[c] = P1 if bit else P0
+                if not bit:
+                    all_one = False
+            if all_one:
+                mats[targ] = target_gate
+            acc += tensor_product_qiskit(mats)
+        return acc
 
     def _generate_equation_latex(self, op: sp.Matrix, old: sp.Matrix, new: sp.Matrix) -> str:
-        """LaTeXの方程式文字列を生成する"""
-        op_latex = sp.latex(op,fold_short_frac=True)
-        old_latex = sp.latex(old,fold_short_frac=True)
-        new_latex = sp.latex(new,fold_short_frac=True)
-        return f"{op_latex} {old_latex} = {new_latex}"
+        op_s = op.applyfunc(_simp)
+        old_s = old.applyfunc(_simp)
+        new_s = new.applyfunc(_simp)
+        return (
+            f"{sp.latex(op_s, fold_short_frac=True)} "
+            f"{sp.latex(old_s, fold_short_frac=True)} = "
+            f"{sp.latex(new_s, fold_short_frac=True)}"
+        )
 
     def reset(self):
-        """シミュレータの状態を初期化する"""
         self.current_state = self._get_initial_state()
         self.history = []
 
     def _calculate_probabilities(self, state_matrix: sp.Matrix) -> list:
-        """状態ベクトルから各基底状態の確率分布を計算する"""
         probabilities = []
-        for i in range(2**self.num_qubits):
-            amp = complex(state_matrix[i, 0])
-            prob = abs(amp)**2
+        for i in range(2 ** self.num_qubits):
+            amp = state_matrix[i, 0]
+            prob = float(_simp(amp * sp.conjugate(amp)))
             bit_string = format(i, f'0{self.num_qubits}b')
             probabilities.append({
                 "state": f"|{bit_string}⟩",
                 "probability": round(prob, 4)
             })
         return probabilities
-
