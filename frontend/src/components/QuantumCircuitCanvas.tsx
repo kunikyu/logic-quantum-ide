@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import useCircuitStore from '../store/useCircuitStore';
+import useCircuitStore, { type QuantumGate } from '../store/useCircuitStore';
 import { QUANTUM_GATES } from './GatePalette';
 import { useQuantumShortcuts } from '../hooks/useQuantumShortcuts';
 
@@ -104,8 +104,13 @@ const QuantumCircuitCanvas: React.FC = () => {
       });
       setQuantumGrid(newGrid);
     } else if (mode === 'new') {
-      pushQuantumHistory();
       const gateType = e.dataTransfer.getData('gateType').toUpperCase();
+      // 既にゲートがある位置への配置は行わない（上書き防止）
+      if (quantumGrid[qIndex][sIndex]) {
+        setConnectionNotice('既にゲートがある位置には配置できません。');
+        return;
+      }
+      pushQuantumHistory();
       const newGrid = [...quantumGrid.map(row => [...row])];
       
       if (gateType === 'CTRL') {
@@ -181,9 +186,20 @@ const QuantumCircuitCanvas: React.FC = () => {
     } else if (mode === 'move') {
       const srcQ = parseInt(e.dataTransfer.getData('q'));
       const srcS = parseInt(e.dataTransfer.getData('s'));
+      if (Number.isNaN(srcQ) || Number.isNaN(srcS)) return;
+
+      const srcGate = quantumGrid[srcQ]?.[srcS];
+      if (!srcGate) return;
+
       const isMultiMove = selectedCells.some(c => c.q === srcQ && c.s === srcS);
-      const newGrid = [...quantumGrid.map(row => [...row])];
-      
+      const newGrid = quantumGrid.map(row => [...row]);
+
+      // 移動するセルと移動先の対応を求める
+      type MoveEntry = { from: { q: number; s: number }; to: { q: number; s: number }; gate: QuantumGate };
+      const moves: MoveEntry[] = [];
+      // 移動対象に含まれるセル（複合ゲートの相方・複数選択の仲間を含む）
+      const movingKeys = new Set<string>();
+
       if (isMultiMove && selectedCells.length > 1) {
         const deltaQ = qIndex - srcQ;
         const deltaS = sIndex - srcS;
@@ -191,77 +207,68 @@ const QuantumCircuitCanvas: React.FC = () => {
         const expanded = [...selectedCells];
         const pairIds = new Set<number>();
         selectedCells.forEach(c => {
-           const g = quantumGrid[c.q][c.s];
-           if (g && g.pairId) pairIds.add(g.pairId);
+          const g = quantumGrid[c.q]?.[c.s];
+          if (g && g.pairId) pairIds.add(g.pairId);
         });
         for (let q = 0; q < quantumGrid.length; q++) {
-           for (let s = 0; s < quantumNumSlots; s++) {
-              const g = quantumGrid[q][s];
-              if (g && g.pairId && pairIds.has(g.pairId)) {
-                 if (!expanded.some(e => e.q === q && e.s === s)) {
-                    expanded.push({q, s});
-                 }
-              }
-           }
+          for (let s = 0; s < quantumNumSlots; s++) {
+            const g = quantumGrid[q][s];
+            if (g && g.pairId && pairIds.has(g.pairId) && !expanded.some(e => e.q === q && e.s === s)) {
+              expanded.push({ q, s });
+            }
+          }
         }
 
-        let canMove = true;
-        for (const cell of expanded) {
-           const tgtQ = cell.q + deltaQ;
-           const tgtS = cell.s + deltaS;
-           if (tgtQ < 0 || tgtQ >= quantumGrid.length || tgtS < 0 || tgtS >= quantumNumSlots) { canMove = false; break; }
-           const isSelf = expanded.some(c => c.q === tgtQ && c.s === tgtS);
-           if (!isSelf && quantumGrid[tgtQ][tgtS]) { canMove = false; break; }
-        }
-
-        if (canMove) {
-           pushQuantumHistory();
-           const gatesToMove = expanded.map(c => ({ src: c, gate: quantumGrid[c.q][c.s] }));
-           expanded.forEach(c => { newGrid[c.q][c.s] = null; });
-           const newSelectedCells: {q: number, s: number}[] = [];
-           gatesToMove.forEach(({src, gate}) => {
-              if (gate) {
-                 newGrid[src.q + deltaQ][src.s + deltaS] = gate;
-                 newSelectedCells.push({ q: src.q + deltaQ, s: src.s + deltaS });
-              }
-           });
-           setQuantumGrid(newGrid);
-           setSelectedCells(newSelectedCells);
+        expanded.forEach(c => {
+          const gate = quantumGrid[c.q]?.[c.s];
+          if (!gate) return;
+          movingKeys.add(`${c.q}-${c.s}`);
+          moves.push({ from: c, to: { q: c.q + deltaQ, s: c.s + deltaS }, gate });
+        });
+      } else if (srcGate.pairId && sIndex !== srcS) {
+        // 複合ゲート（制御線でつながったノード）は同じ列のノードをまとめて移動する
+        for (let q = 0; q < quantumGrid.length; q++) {
+          const gate = quantumGrid[q][srcS];
+          if (gate && gate.pairId === srcGate.pairId) {
+            movingKeys.add(`${q}-${srcS}`);
+            moves.push({ from: { q, s: srcS }, to: { q, s: sIndex }, gate });
+          }
         }
       } else {
-        const gate = newGrid[srcQ][srcS];
-        
-        if (gate && gate.pairId) {
-          if (sIndex === srcS) {
-            const existingInTarget = newGrid[qIndex][sIndex];
-            if (existingInTarget && existingInTarget.pairId === gate.pairId) {
-              return;
-            }
-            pushQuantumHistory();
-            newGrid[srcQ][srcS] = null;
-            newGrid[qIndex][sIndex] = gate;
-            setSelectedCells([{ q: qIndex, s: sIndex }]);
-          } else {
-            pushQuantumHistory();
-            const pairedNodes: {q: number, gate: any}[] = [];
-            for (let q = 0; q < newGrid.length; q++) {
-              if (newGrid[q][srcS] && newGrid[q][srcS]?.pairId === gate.pairId) {
-                pairedNodes.push({q, gate: newGrid[q][srcS]});
-              }
-            }
-            pairedNodes.forEach(p => { newGrid[p.q][srcS] = null; });
-            pairedNodes.forEach(p => { newGrid[p.q][sIndex] = p.gate; });
-            setSelectedCells(pairedNodes.map(p => ({ q: p.q, s: sIndex })));
-          }
-        } else {
-          pushQuantumHistory();
-          newGrid[srcQ][srcS] = null;
-          newGrid[qIndex][sIndex] = gate;
-          setSelectedCells([{ q: qIndex, s: sIndex }]);
-        }
-        
-        setQuantumGrid(newGrid);
+        // 単一ノード（同一スロット内での複合ゲートの1ノード移動を含む）
+        movingKeys.add(`${srcQ}-${srcS}`);
+        moves.push({ from: { q: srcQ, s: srcS }, to: { q: qIndex, s: sIndex }, gate: srcGate });
       }
+
+      if (moves.length === 0) return;
+      // 同じ位置にドロップした場合は何もしない
+      if (moves.every(m => m.from.q === m.to.q && m.from.s === m.to.s)) return;
+
+      // 移動先が回路の範囲外になる場合は移動しない
+      const isOutOfBounds = moves.some(m =>
+        m.to.q < 0 || m.to.q >= quantumGrid.length ||
+        m.to.s < 0 || m.to.s >= quantumNumSlots,
+      );
+      if (isOutOfBounds) {
+        setConnectionNotice('移動先が回路の範囲外です。移動できません。');
+        return;
+      }
+
+      // 移動先が他のノードに占有されている場合は移動しない（上書き・入れ替えは行わない）
+      // 複合ゲートは移動するすべてのセルについて空きを確認する
+      const isOverlapping = moves.some(m =>
+        newGrid[m.to.q][m.to.s] !== null && !movingKeys.has(`${m.to.q}-${m.to.s}`),
+      );
+      if (isOverlapping) {
+        setConnectionNotice('移動先に既にゲートがあります。移動できません。');
+        return;
+      }
+
+      pushQuantumHistory();
+      moves.forEach(m => { newGrid[m.from.q][m.from.s] = null; });
+      moves.forEach(m => { newGrid[m.to.q][m.to.s] = m.gate; });
+      setQuantumGrid(newGrid);
+      setSelectedCells(moves.map(m => ({ q: m.to.q, s: m.to.s })));
     }
   };
 
