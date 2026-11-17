@@ -9,6 +9,7 @@ import { BarChart2, CircleDashed, ListTree, ArrowDownUp, Copy } from 'lucide-rea
 type Tab = 'process' | 'counts' | 'phase' | 'statevector' | 'math';
 type SortMode = 'basis' | 'frequency';
 type DisplayMode = 'rect' | 'polar' | 'root';
+type MathDisplayMode = 'dirac' | 'matrix';
 
 interface StateData {
   basisStr: string;
@@ -105,6 +106,7 @@ const QuantumResultsPanel: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('process');
   const [sortMode, setSortMode] = useState<SortMode>('basis');
   const [displayMode, setDisplayMode] = useState<DisplayMode>('rect');
+  const [mathDisplayMode, setMathDisplayMode] = useState<MathDisplayMode>('dirac');
   
   const panelRef = React.useRef<HTMLDivElement>(null);
 
@@ -280,6 +282,17 @@ const QuantumResultsPanel: React.FC = () => {
       alert("コピーに失敗しました。");
     }
   };
+
+  const mathToggleStyle = (isActive: boolean) => ({
+    padding: '6px 16px',
+    fontSize: '12px',
+    fontWeight: isActive ? 600 : 400,
+    color: isActive ? '#fff' : 'var(--color-text-secondary)',
+    backgroundColor: isActive ? 'var(--color-accent-purple)' : 'var(--color-bg-panel)',
+    border: '1px solid var(--color-border)',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+  });
 
   return (
     <div 
@@ -589,18 +602,32 @@ const QuantumResultsPanel: React.FC = () => {
                       : <><InlineMath math={`\\text{${(currentStepData?.name || '').toUpperCase()}}`} /> ゲート適用</>
                     }
                   </div>
-                  <div style={{ marginBottom: '25px' }}>
-                    <h4 style={{ margin: '0 0 5px 0', fontSize: '15px', color: '#444', borderBottom: '1px solid #ddd' }}>ブラケット記法</h4>
-                    <div style={{ overflowX: 'auto', paddingBottom: '10px' }}>
-                      <BlockMath math={`\\def\\arraystretch{1.5} ${currentStepData?.dirac_equation || ''}`} />
+                  <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
+                    <div style={{ display: 'flex', borderRadius: '6px', overflow: 'hidden' }}>
+                      <button 
+                        style={{ ...mathToggleStyle(mathDisplayMode === 'dirac'), borderRight: 'none', borderTopLeftRadius: '6px', borderBottomLeftRadius: '6px' }}
+                        onClick={() => setMathDisplayMode('dirac')}
+                      >
+                        ブラケット記法
+                      </button>
+                      <button 
+                        style={{ ...mathToggleStyle(mathDisplayMode === 'matrix'), borderTopRightRadius: '6px', borderBottomRightRadius: '6px' }}
+                        onClick={() => setMathDisplayMode('matrix')}
+                      >
+                        行列表現
+                      </button>
                     </div>
                   </div>
-
-                  <div>
-                    <h4 style={{ margin: '0 0 5px 0', fontSize: '15px', color: '#444', borderBottom: '1px solid #ddd' }}>行列表現</h4>
-                    <div style={{ overflowX: 'auto', paddingBottom: '10px' }}>
-                      <BlockMath math={`\\def\\arraystretch{1.5} ${currentStepData?.equation_latex || ''}`} />
-                    </div>
+                  <div style={{ minHeight: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {mathDisplayMode === 'dirac' ? (
+                      <div style={{ overflowX: 'auto', paddingBottom: '10px', width: '100%' }}>
+                        <BlockMath math={`\\def\\arraystretch{1.5} ${currentStepData?.dirac_equation || ''}`} />
+                      </div>
+                    ) : (
+                      <div style={{ overflowX: 'auto', paddingBottom: '10px', width: '100%' }}>
+                        <BlockMath math={`\\def\\arraystretch{1.5} ${currentStepData?.equation_latex || ''}`} />
+                      </div>
+                    )}
                   </div>
                 </div>
               </>
