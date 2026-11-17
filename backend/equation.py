@@ -1,7 +1,7 @@
 import re
 import sympy as sp
 from sympy.physics.quantum import TensorProduct
-
+from dirac_notation import *
 # --- 基本行列の定義 ---
 I_mat = sp.Matrix([[1, 0], [0, 1]])
 X_mat = sp.Matrix([[0, 1], [1, 0]])
@@ -172,11 +172,33 @@ def local_qubit_diracs(state: sp.Matrix, num_qubits: int) -> list:
 
 
 class SymbolicSimulator:
-    def __init__(self, num_qubits: int):
-        self.num_qubits = num_qubits
+    def __init__(self, qc):
+        """
+        初期化時に QuantumCircuit を受け取り、内部で量子ビット数を取得します。
+        その後、自動的にシミュレーションを実行して内部データを構築・保持します。
+        """
+        self.qc = qc
+        self.num_qubits = qc.num_qubits
         self.current_state = self._get_initial_state()
         self.history = []
+        
+        # 初期化時に自動でシミュレーションを実行し、履歴を構築
+        self._simulate()
 
+    # --- 外部から必要なデータを取得するためのメソッド (ゲッター) ---
+    def get_history(self) -> list:
+        """各ステップの数式や確率分布を含むシミュレーション履歴を返す"""
+        return self.history
+
+    def get_final_state(self) -> sp.Matrix:
+        """現在の状態ベクトル（最終状態）を返す"""
+        return self.current_state
+
+    def get_quantum_circuit(self):
+        """保持しているQuantumCircuitを返す"""
+        return self.qc
+
+    # --- 既存の補助メソッド ---
     def _get_initial_state(self) -> sp.Matrix:
         dim = 2 ** self.num_qubits
         state = sp.zeros(dim, 1)
@@ -198,30 +220,43 @@ class SymbolicSimulator:
     def state_latex(self) -> str:
         return sp.latex(self.current_state.applyfunc(_simp), fold_short_frac=True)
 
-    def apply_qiskit_circuit(self, qc) -> list:
-        gate_infos = self._extract_gate_info(qc)
+    # --- シミュレーション実行ロジック ---
+    def _simulate(self):
+        """内部でシミュレーションを実行し、履歴を構築する（旧 apply_qiskit_circuit の処理）"""
+        gate_infos = self._extract_gate_info(self.qc)
+        
         self.history.append({
             "step": 0,
             "name": "initial",
             "qargs": [],
             "params": [],
             "equation_latex": sp.latex(self.current_state, fold_short_frac=True),
-            "probabilities": self._calculate_probabilities(self.current_state)
+            "dirac_equation": state_to_dirac_latex(self.current_state, self.num_qubits),
+            "probabilities": self._calculate_probabilities(self.current_state),
+            "dirac": dirac_str(self.current_state, self.num_qubits),
+            "qubits_state": local_qubit_diracs(self.current_state, self.num_qubits)
         })
 
         for step, info in enumerate(gate_infos, 1):
             global_op = self._build_global_matrix(info)
             old_state, new_state = self.apply_matrix(global_op)
+
+            old_state_dirac = state_to_dirac_latex(old_state, self.num_qubits)
+            new_state_dirac = state_to_dirac_latex(new_state, self.num_qubits)
+            operator_dirac = operator_to_dirac_latex(info, self.num_qubits)
+            intermediate_dirac = intermediate_dirac_latex(info, old_state, self.num_qubits)
+            dirac_equation = f"{operator_dirac} {old_state_dirac} = {intermediate_dirac} = {new_state_dirac}"
             self.history.append({
                 "step": step,
                 "name": info["name"],
                 "qargs": info["qargs"],
                 "params": info.get("params", []),
                 "equation_latex": self._generate_equation_latex(global_op, old_state, new_state),
-                "probabilities": self._calculate_probabilities(new_state)
+                "dirac_equation": dirac_equation,
+                "probabilities": self._calculate_probabilities(new_state),
+                "dirac": dirac_str(new_state, self.num_qubits),
+                "qubits_state": local_qubit_diracs(new_state, self.num_qubits)
             })
-
-        return self.history
 
     def _extract_gate_info(self, qc) -> list:
         gate_infos = []

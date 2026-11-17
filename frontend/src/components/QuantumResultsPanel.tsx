@@ -9,6 +9,7 @@ import { BarChart2, CircleDashed, ListTree, ArrowDownUp, Copy } from 'lucide-rea
 type Tab = 'process' | 'counts' | 'phase' | 'statevector' | 'math';
 type SortMode = 'basis' | 'frequency';
 type DisplayMode = 'rect' | 'polar' | 'root';
+type MathDisplayMode = 'dirac' | 'matrix';
 
 interface StateData {
   basisStr: string;
@@ -90,7 +91,7 @@ const formatQubitState = (qs: any): string => {
   return 'Unknown';
 };
 
-const stepDirac = (step: any): string => step.dirac || diracFromNumeric(step.statevector || []);
+const stepDirac = (step: any): string => step.dirac || step.dirac_equation || diracFromNumeric(step.statevector || []);
 
 // --- Components ---
 const QuantumResultsPanel: React.FC = () => {
@@ -105,6 +106,7 @@ const QuantumResultsPanel: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('process');
   const [sortMode, setSortMode] = useState<SortMode>('basis');
   const [displayMode, setDisplayMode] = useState<DisplayMode>('rect');
+  const [mathDisplayMode, setMathDisplayMode] = useState<MathDisplayMode>('dirac');
   
   const panelRef = React.useRef<HTMLDivElement>(null);
 
@@ -121,21 +123,23 @@ const QuantumResultsPanel: React.FC = () => {
     return () => window.removeEventListener('mousedown', handleGlobalClick);
   }, [setQuantumSelectedStep]);
 
-  const { counts, statevector, error, measured_qubits, calc_steps, latex } = quantumSimulationResult || {};
+  const { counts, statevector, error, measured_qubits, history: integratedHistory } = quantumSimulationResult || {};
   const [currentIndex, setCurrentIndex] = useState(0);
-  const currentStepData = latex?.[currentIndex];
+  
+  const currentStepData = integratedHistory?.[currentIndex];
 
   // historyが更新されたらStep 0に戻す
   React.useEffect(() => {
     setCurrentIndex(0);
-  }, [latex]);
+    console.log("API response history:", integratedHistory);
+  }, [integratedHistory]);
 
   const handlePrev = () => {
     if (currentIndex > 0) setCurrentIndex(currentIndex - 1);
   };
 
   const handleNext = () => {
-    if (currentIndex < latex.length - 1 ) setCurrentIndex(currentIndex + 1);
+    if (integratedHistory && currentIndex < integratedHistory.length - 1 ) setCurrentIndex(currentIndex + 1);
   };
 
   // 計算過程のステップに対応する回路セルを求める
@@ -191,7 +195,7 @@ const QuantumResultsPanel: React.FC = () => {
       if (measured_qubits && measured_qubits.length > 0) {
         let masked = "";
         for (let i = 0; i < state.length; i++) {
-          const qIndex = state.length - 1 - i; // Qiskitの出力は右端がq0
+          const qIndex = state.length - 1 - i; 
           if (measured_qubits.includes(qIndex)) {
             masked += state[i];
           } else {
@@ -240,14 +244,14 @@ const QuantumResultsPanel: React.FC = () => {
   });
 
   const handleCopyText = async () => {
-    if (!calc_steps || !quantumSimulationResult) return;
+    if (!integratedHistory || !quantumSimulationResult) return;
     
     let textStr = "【量子シミュレーション結果】\n\n";
 
     // 1. 計算過程
     textStr += "■ 計算過程\n";
-    calc_steps.forEach((step: any, idx: number) => {
-      textStr += `${idx + 1}. ${step.label}\n`;
+    integratedHistory.forEach((step: any, idx: number) => {
+      textStr += `${idx}. ${step.label}\n`;
       if (step.qubits_state) {
         step.qubits_state.forEach((qs: any, qidx: number) => {
           textStr += `  q${qidx}: ${formatQubitState(qs)}\n`;
@@ -278,6 +282,17 @@ const QuantumResultsPanel: React.FC = () => {
       alert("コピーに失敗しました。");
     }
   };
+
+  const mathToggleStyle = (isActive: boolean) => ({
+    padding: '6px 16px',
+    fontSize: '12px',
+    fontWeight: isActive ? 600 : 400,
+    color: isActive ? '#fff' : 'var(--color-text-secondary)',
+    backgroundColor: isActive ? 'var(--color-accent-purple)' : 'var(--color-bg-panel)',
+    border: '1px solid var(--color-border)',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+  });
 
   return (
     <div 
@@ -332,14 +347,15 @@ const QuantumResultsPanel: React.FC = () => {
         {/* Process タブ */}
         {activeTab === 'process' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {calc_steps && calc_steps.length > 0 ? (
+            {integratedHistory && integratedHistory.length > 0 ? (
               <>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <h3 style={{ margin: 0, fontSize: '14px', color: 'var(--color-text-primary)' }}>回路の計算過程</h3>
-                  {calc_steps.map((step: any, idx: number) => {
+                  {integratedHistory.map((step: any, idx: number) => {
                     const diracStr = stepDirac(step);
 
                     const gateDesc = (() => {
+                      if (!step.label) return '';
                       const isCtrl = step.label.includes('(ctrl)');
                       if (step.label.includes('→ H')) return '重ね合わせ状態を作る（|0⟩ → |+⟩, |1⟩ → |-⟩）';
                       if (step.label.includes('→ X') && !step.label.includes('→ CX') && !step.label.includes('→ MCX') && !step.label.includes('→ CCX')) return 'ビット反転（|0⟩ → |1⟩, |1⟩ → |0⟩）';
@@ -360,7 +376,7 @@ const QuantumResultsPanel: React.FC = () => {
                       return '';
                     })();
                     
-                    const prev_qubits_state = idx > 0 ? calc_steps[idx - 1].qubits_state : null;
+                    const prev_qubits_state = idx > 0 ? integratedHistory[idx - 1].qubits_state : null;
 
                     const isSelected = quantumSelectedStep?.slot === step.slot && 
                       (!quantumSelectedStep?.qubits?.length || !step.qubits || quantumSelectedStep?.qubits?.some((q: number) => step.qubits?.includes(q)));
@@ -375,7 +391,7 @@ const QuantumResultsPanel: React.FC = () => {
                           backgroundColor: bgColor, 
                           borderRadius: '6px', 
                           border: `1px solid ${borderColor}`,
-                          cursor: step.slot >= 0 ? 'pointer' : 'default',
+                          cursor: (step.slot ?? -1) >= 0 ? 'pointer' : 'default',
                           transition: 'all 0.2s'
                         }}
                         onClick={(e) => {
@@ -384,7 +400,7 @@ const QuantumResultsPanel: React.FC = () => {
                         }}
                       >
                         <div style={{ fontWeight: 600, fontSize: '12px', color: 'var(--color-text-primary)', marginBottom: '4px' }}>
-                          {idx + 1}. {step.label}
+                          {idx}. {step.label || '初期状態'}
                         </div>
                         {gateDesc && (
                           <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginBottom: '8px' }}>
@@ -414,8 +430,6 @@ const QuantumResultsPanel: React.FC = () => {
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
                   <h3 style={{ margin: 0, fontSize: '14px', color: 'var(--color-text-primary)', borderTop: '1px solid var(--color-border)', paddingTop: '20px' }}>出力結果</h3>
-                  
-
 
                   <div style={{ padding: '12px', backgroundColor: 'rgba(168,85,247,0.05)', borderRadius: '6px', border: '1px solid rgba(168,85,247,0.2)' }}>
                     <div style={{ fontSize: '13px', color: 'var(--color-text-primary)', marginBottom: '10px' }}>
@@ -567,29 +581,53 @@ const QuantumResultsPanel: React.FC = () => {
         {/* math タブ */}
         {activeTab === 'math' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {latex && latex.length > 0 ? (
+            {integratedHistory && integratedHistory.length > 0 ? (
               <>
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '20px', marginBottom: '10px' }}>
                   <button onClick={handlePrev} disabled={currentIndex === 0} style={{ padding: '5px 15px', cursor: currentIndex === 0 ? 'not-allowed' : 'pointer' }}>
                     ◀ 前のステップ
                   </button>
                   <span style={{ fontWeight: 'bold' }}>
-                    Step {currentStepData.step} / {latex.length - 1}
+                    Step {currentStepData?.step ?? 0} / {integratedHistory.length - 1}
                   </span>
-                  <button onClick={handleNext} disabled={currentIndex === latex.length - 1} style={{ padding: '5px 15px', cursor: currentIndex === latex.length - 1 ? 'not-allowed' : 'pointer' }}>
+                  <button onClick={handleNext} disabled={currentIndex === integratedHistory.length - 1} style={{ padding: '5px 15px', cursor: currentIndex === integratedHistory.length - 1 ? 'not-allowed' : 'pointer' }}>
                     次のステップ ▶
                   </button>
                 </div>
                 <div style={{ flex: '1', border: '2px solid #333', borderRadius: '8px', padding: '10px', overflowY: 'auto' }}>
                   <h3 style={{ margin: '0 0 10px 0', textAlign: 'center' }}>式</h3>
                   <div style={{ textAlign: 'center', marginBottom: '10px' }}>
-                    {currentStepData.step === 0 
+                    {currentStepData?.step === 0 
                       ? <span>初期状態</span> 
-                      : <><InlineMath math={`\\text{${currentStepData.name.toUpperCase()}}`} /> ゲート適用</>
+                      : <><InlineMath math={`\\text{${(currentStepData?.name || '').toUpperCase()}}`} /> ゲート適用</>
                     }
                   </div>
-                  <div style={{ overflowX: 'auto', paddingBottom: '10px' }}>
-                    <BlockMath math={`\\def\\arraystretch{1.5} ${currentStepData.equation_latex}`} />
+                  <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
+                    <div style={{ display: 'flex', borderRadius: '6px', overflow: 'hidden' }}>
+                      <button 
+                        style={{ ...mathToggleStyle(mathDisplayMode === 'dirac'), borderRight: 'none', borderTopLeftRadius: '6px', borderBottomLeftRadius: '6px' }}
+                        onClick={() => setMathDisplayMode('dirac')}
+                      >
+                        ブラケット記法
+                      </button>
+                      <button 
+                        style={{ ...mathToggleStyle(mathDisplayMode === 'matrix'), borderTopRightRadius: '6px', borderBottomRightRadius: '6px' }}
+                        onClick={() => setMathDisplayMode('matrix')}
+                      >
+                        行列表現
+                      </button>
+                    </div>
+                  </div>
+                  <div style={{ minHeight: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {mathDisplayMode === 'dirac' ? (
+                      <div style={{ overflowX: 'auto', paddingBottom: '10px', width: '100%' }}>
+                        <BlockMath math={`\\def\\arraystretch{1.5} ${currentStepData?.dirac_equation || ''}`} />
+                      </div>
+                    ) : (
+                      <div style={{ overflowX: 'auto', paddingBottom: '10px', width: '100%' }}>
+                        <BlockMath math={`\\def\\arraystretch{1.5} ${currentStepData?.equation_latex || ''}`} />
+                      </div>
+                    )}
                   </div>
                 </div>
               </>
